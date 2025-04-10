@@ -30,11 +30,14 @@ def main():
                 # server_url="https://my-self-hosted-server.com",
                 # identity_type="user"
                 # identity="user-id",
-
-                connectors=["*"] # Initialize all available connections for this example
-            )
+                authkit=True,
+                authkit_supported_platforms=["gmail", "google-calendar"],
+                connectors=[
+                    "*"
+                ],  # Initialize all available connections for this example
+            ),
         )
-        
+
         llm = ChatOpenAI(
             temperature=0,
             model="gpt-4o",
@@ -45,17 +48,13 @@ def main():
             client=pica_client,
             llm=llm,
             agent_type=AgentType.OPENAI_FUNCTIONS,
-            system_prompt="Always start your response with `Pica works like ✨\n`" # Optional: Custom system prompt to append
+            system_prompt="Always start your response with `Pica works like ✨\n`",  # Optional: Custom system prompt to append
         )
 
-        result = agent.invoke({
-            "input": (
-                "What connections do I have access to?"
-            )
-        })
-        
+        result = agent.invoke({"input": ("What connections do I have access to?")})
+
         print(f"\nWorkflow Result:\n {result}")
-    
+
     except Exception as e:
         print(f"ERROR: An unexpected error occurred: {e}")
         sys.exit(1)
