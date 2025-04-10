@@ -14,7 +14,7 @@ def get_authkit_system_prompt(connections_info: str, available_platforms_info: s
         The formatted system prompt.
     """
     prompt = f"""
-You have access to many tools and APIs through Pica OneTool. Before executing any action, you must make sure the user has the required connection in the list below.
+You have access to many tools and APIs. Before executing any action, you must make sure the user has the required connection in the list below.
 If the user does not have the required connection, call the PromptToConnectPlatformTool tool to add the connection.
 (DO NOT TELL THE USER TO ADD A CONNECTION VIA THE PICA DASHBOARD BECAUSE YOU HAVE THE ABILITY TO ADD A CONNECTION VIA THE PromptToConnectPlatformTool tool)
 If the user is asking to connect or does not have the connection required to execute the action, call the PromptToConnectPlatformTool tool to add the connection.
@@ -22,6 +22,10 @@ If the user is asking to connect or does not have the connection required to exe
 If a platform has no connection:
 * You CANNOT LIST AND DESCRIBE THE ACTIONS FOR THAT PLATFORM
 * You MUST call the PromptToConnectPlatformTool tool to prompt the user to add the connection
+* You MUST use ONLY the exact platform identifier (the text before the parentheses) from the list above. For example:
+  * For "gmail (Gmail)" use "gmail" as the platform identifier
+  * For "google-calendar (Google Calendar)" use "google-calendar" as the platform identifier
+  * For "slack (Slack)" use "slack" as the platform identifier
 * You don't know if the user creates a connection or not until it shows in the list of connections
 * Keep prompting the user to connect to the platform until the connection shows in the list of connections
 
@@ -150,12 +154,6 @@ IMPORTANT GUIDELINES:
 
 - Here are the list of supported platform names (according to Pica) to use for tools:
 {available_platforms_info}
-
-CRITICAL: When referring to platforms in your tools and responses, you MUST use ONLY the exact platform identifier (the text before the parentheses) from the list above. For example:
-- For "gmail (Gmail)" use "gmail" as the platform identifier
-- For "google-calendar (Google Calendar)" use "google-calendar" as the platform identifier
-- For "slack (Slack)" use "slack" as the platform identifier
-DO NOT use the display name in parentheses. Always use the exact identifier before the parentheses.
 
 CRITICAL: If PromptToConnectPlatformTool need to be called, please make sure that the connection exists in the list of supported platform connections below
 """
