@@ -55,7 +55,7 @@ class PicaClient:
         
         self.get_connection_url = f"{self.base_url}/v1/vault/connections"
         self.available_actions_url = f"{self.base_url}/v1/knowledge"
-        self.get_connection_definitions_url = f"{self.base_url}/v1/public/connection-definitions?limit=500"
+        self.get_available_connectors_url = f"{self.base_url}/v1/available-connectors"
         
         self._initialized = False
         self._connectors_filter = options.connectors
@@ -79,7 +79,7 @@ class PicaClient:
         self.initialize()
     
     def initialize(self) -> None:
-        """Initialize the client by fetching connections and connection definitions."""
+        """Initialize the client by fetching connections and available connectors."""
         if self._initialized:
             logger.debug("Client already initialized, skipping initialization")
             return
@@ -128,8 +128,8 @@ class PicaClient:
             logger.debug(f"Filtered available platforms from {len(self.connection_definitions)} to {len(filtered_connection_definitions)} based on authkit_supported_platforms")
         
         available_platforms_info = "\n\t* ".join([
-            f"{def_.platform} ({def_.frontend.spec.title})"
-            for def_ in filtered_connection_definitions
+            f"{def_.platform} ({def_.name})"
+            for def_ in self.connection_definitions
         ])
         
         if self._use_authkit:
@@ -153,57 +153,64 @@ class PicaClient:
         """Fetch connections from the API."""
         try:
             logger.debug("Fetching connections from API")
-            headers = self._generate_headers()
             
-            query_params: Dict[str, Union[str, int]] = {"limit": 300}
+            params: Dict[str, Any] = {}
             
             if self._identity_filter:
-                query_params["identity"] = self._identity_filter
+                params["identity"] = self._identity_filter
                 
             if self._identity_type_filter:
-                query_params["identityType"] = self._identity_type_filter
+                params["identityType"] = self._identity_type_filter
             
-            url = self.get_connection_url
-            log_request_response("GET", url, request_data=query_params)
-            
-            response = requests.get(url, headers=headers, params=query_params)
-            response.raise_for_status()
-            
-            data = response.json()
-            log_request_response("GET", url, 
-                                response_status=response.status_code, 
-                                response_data={"total": len(data.get("rows", []))})
-            
-            self.connections = [Connection(**conn) for conn in data.get("rows", [])]
-            logger.info(f"Successfully fetched {len(self.connections)} connections")
+            try:
+                # Use the pagination method to handle pagination properly
+                connections_data = self._paginate_results(
+                    self.get_connection_url,
+                    params=params
+                )
+                
+                self.connections = [Connection(**conn) for conn in connections_data]
+                logger.info(f"Successfully fetched {len(self.connections)} connections")
+            except Exception as e:
+                logger.error(f"Failed to paginate connections: {e}", exc_info=True)
+                raise
+                
         except Exception as e:
             logger.error(f"Failed to initialize connections: {e}", exc_info=True)
             print(f"Failed to initialize connections: {e}")
             self.connections = []
     
     def _initialize_connection_definitions(self) -> None:
-        """Fetch connection definitions from the API."""
+        """Fetch available connectors from the API."""
         try:
-            logger.debug("Fetching connection definitions from API")
-            headers = self._generate_headers()
+            logger.debug("Fetching available connectors from API")
             
-            log_request_response("GET", self.get_connection_definitions_url)
-            response = requests.get(self.get_connection_definitions_url, headers=headers)
-            response.raise_for_status()
+            params: Dict[str, Any] = {}
             
-            data = response.json()
-            log_request_response("GET", self.get_connection_definitions_url, 
-                                response_status=response.status_code, 
-                                response_data={"total": len(data.get("rows", []))})
+            # Add authkit parameter if enabled
+            if self._use_authkit:
+                params["authkit"] = "true"
+                logger.debug("Adding authkit=true parameter to available connectors request")
             
-            self.connection_definitions = [
-                ConnectionDefinition(**def_) 
-                for def_ in data.get("rows", [])
-            ]
-            logger.info(f"Successfully fetched {len(self.connection_definitions)} connection definitions")
+            try:
+                # Use the pagination method to handle pagination properly
+                connectors_data = self._paginate_results(
+                    self.get_available_connectors_url,
+                    params=params
+                )
+                
+                self.connection_definitions = [
+                    ConnectionDefinition(**def_) 
+                    for def_ in connectors_data
+                ]
+                logger.info(f"Successfully fetched {len(self.connection_definitions)} available connectors")
+            except Exception as e:
+                logger.error(f"Failed to paginate available connectors: {e}", exc_info=True)
+                raise
+                
         except Exception as e:
-            logger.error(f"Failed to initialize connection definitions: {e}", exc_info=True)
-            print(f"Failed to initialize connection definitions: {e}")
+            logger.error(f"Failed to initialize available connectors: {e}", exc_info=True)
+            print(f"Failed to initialize available connectors: {e}")
             self.connection_definitions = []
     
     def _generate_headers(self) -> Dict[str, str]:

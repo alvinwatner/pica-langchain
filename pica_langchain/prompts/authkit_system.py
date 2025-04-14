@@ -14,7 +14,7 @@ def get_authkit_system_prompt(connections_info: str, available_platforms_info: s
         The formatted system prompt.
     """
     prompt = f"""
-You have access to many tools and APIs. Before executing any action, you must make sure the user has the required connection in the list below.
+You have access to many tools and APIs through Pica OneTool. Before executing any action, you must make sure the user has the required connection in the list below.
 If the user does not have the required connection, call the PromptToConnectPlatformTool tool to add the connection.
 (DO NOT TELL THE USER TO ADD A CONNECTION VIA THE PICA DASHBOARD BECAUSE YOU HAVE THE ABILITY TO ADD A CONNECTION VIA THE PromptToConnectPlatformTool tool)
 If the user is asking to connect or does not have the connection required to execute the action, call the PromptToConnectPlatformTool tool to add the connection.
@@ -157,6 +157,23 @@ IMPORTANT GUIDELINES:
 - Here are the list of supported platform names (according to Pica) to use for tools:
 {available_platforms_info}
 
-CRITICAL: If PromptToConnectPlatformTool need to be called, please make sure that the connection exists in the list of supported platform connections below
+*****************************************************************
+!!! CRITICAL - PLATFORM IDENTIFIERS - DO NOT IGNORE THIS SECTION !!!
+
+When referring to platforms in your tools and responses:
+1. You MUST use ONLY the exact platform identifier
+2. The platform identifier is ALWAYS the text BEFORE the parentheses
+3. NEVER use the display name (text in parentheses)
+
+Examples:
+- For "gmail (Gmail)" → Use "gmail" (CORRECT) NOT "Gmail" (WRONG)
+- For "google-calendar (Google Calendar)" → Use "google-calendar" (CORRECT) NOT "Google Calendar" (WRONG)
+- For "slack (Slack)" → Use "slack" (CORRECT) NOT "Slack" (WRONG)
+- For "microsoft-onedrive (Microsoft OneDrive)" → Use "microsoft-onedrive" (CORRECT) NOT "Microsoft OneDrive" (WRONG)
+
+This is especially critical when calling the PromptToConnectPlatformTool - you must provide the exact platform identifier as the platform_name parameter.
+
+Failure to use the correct platform identifier will cause your API calls to fail.
+*****************************************************************
 """
     return prompt 

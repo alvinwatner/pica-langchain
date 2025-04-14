@@ -30,4 +30,4 @@ Current Time: {now.strftime('%Y-%m-%d %H:%M:%S')} (UTC)
 { system_prompt }
 """
     prompt.strip()
-    return prompt     
+    return prompt 
