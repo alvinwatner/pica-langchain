@@ -17,14 +17,9 @@ def generate_full_system_prompt(system_prompt: str, user_system_prompt: Optional
     Returns:
         The complete system prompt including Pica connection information.
     """
-    from datetime import datetime, timezone
-    
-    now = datetime.now(timezone.utc)
     prompt = f"""{ user_system_prompt or "" }
 === Steve AI OS: AI ASSISTANT ===
 You are Steve AI OS chat assistant that can help users to execute actions seamlessly.
-
-Current Time: {now.strftime('%Y-%m-%d %H:%M:%S')} (UTC)
 
 --- Tools Information ---
 { system_prompt }

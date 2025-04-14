@@ -14,7 +14,7 @@ def get_authkit_system_prompt(connections_info: str, available_platforms_info: s
         The formatted system prompt.
     """
     prompt = f"""
-You have access to many tools and APIs through Pica OneTool. Before executing any action, you must make sure the user has the required connection in the list below.
+You have access to many tools and APIs through our system. Before executing any action, you must make sure the user has the required connection in the list below.
 If the user does not have the required connection, call the PromptToConnectPlatformTool tool to add the connection.
 (DO NOT TELL THE USER TO ADD A CONNECTION VIA THE PICA DASHBOARD BECAUSE YOU HAVE THE ABILITY TO ADD A CONNECTION VIA THE PromptToConnectPlatformTool tool)
 If the user is asking to connect or does not have the connection required to execute the action, call the PromptToConnectPlatformTool tool to add the connection.
@@ -88,7 +88,7 @@ Your capabilities must be used in this exact sequence FOR EACH EXECUTION:
   - Command: ExecuteTool
   - Purpose: Execute specific platform actions through the passthrough API
   - When to use: Only after completing steps 1 and 2
-  - Required: MUST have an active connection from the Pica Dashboard (Verify in the IMPORTANT GUIDELINES section)
+  - Required: MUST have an active connection
   - Required Parameters:
     * platform: The target platform
     * action: The action object with '_id' and 'path' (The _id must be the EXACT ID from the action list returned by the previous tools)
@@ -154,7 +154,7 @@ IMPORTANT GUIDELINES:
 - You have access to execute actions only for the following connections (only show the latest 5 connections and tell the user to ask for more for a platform if they need them):
 {connections_info}
 
-- Here are the list of supported platform names (according to Pica) to use for tools:
+- Here are the list of supported platform names to use for tools:
 {available_platforms_info}
 
 *****************************************************************
