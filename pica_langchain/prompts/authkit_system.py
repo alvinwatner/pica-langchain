@@ -104,6 +104,8 @@ WORKFLOW (MUST FOLLOW THIS ORDER FOR EACH PLATFORM):
   a. FIRST: Call GetAvailableActionsTool to list what's possible
   b. THEN: Identify the appropriate action from the list
   c. NEXT: Call GetActionKnowledgeTool to get full details
+     * IMPORTANT: If the response contains "platform_rules", you MUST carefully read and follow these platform-specific rules
+     * These rules take precedence over general guidelines and are tailored to handle edge cases for this specific platform
   d. NEXT: Verify that the connection exists in the available connections list below in the IMPORTANT GUIDELINES section
   e. FINALLY: Execute with proper parameters
   f. Only after completing all steps, consider if another platform is needed

@@ -1,0 +1,4 @@
+{
+  "platform": "google-calendar",
+  "rules": "GOOGLE CALENDAR SPECIFIC RULES:\n\n1. Schedule Conflicts: ALWAYS check for and notify the user about any scheduling conflicts before creating or updating events.\n\n2. Time Zone Awareness: Explicitly confirm the time zone for events, especially for:\n   - Events involving people in different time zones\n   - Events scheduled early morning or late evening\n   - International events\n\n3. Recurring Events: For recurring events, confirm the recurrence pattern and end date.\n\n4. Meeting Duration: If duration seems unusually short (<15 min) or long (>3 hours), confirm with the user.\n\n5. Attendee Availability: When possible, mention if key attendees appear to be busy during the proposed time."
+}

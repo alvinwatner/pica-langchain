@@ -1,0 +1,4 @@
+{
+  "platform": "default",
+  "rules": "GENERAL PLATFORM RULES:\n\n1. Confirmation: ALWAYS confirm with the user before taking irreversible actions like:\n   - Deleting data\n   - Sending messages\n   - Making purchases\n   - Changing permissions\n\n2. Data Validation: Verify that all required fields have valid values before proceeding.\n\n3. Error Handling: If an action fails, provide clear information about what went wrong and how to fix it.\n\n4. Privacy: Never expose sensitive information in responses unless explicitly requested.\n\n5. Alternatives: When appropriate, suggest alternative approaches if the requested action has potential issues."
+}

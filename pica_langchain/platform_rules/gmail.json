@@ -1,0 +1,4 @@
+{
+  "platform": "gmail",
+  "rules": "GMAIL SPECIFIC RULES:\n\n1. Email Validation: ALWAYS confirm with the user before sending an email if:\n   - The recipient's email address is not explicitly provided\n   - The email address appears to be invalid (missing @ symbol, domain, etc.)\n   - You had to infer or guess the email address\n\n2. Content Confirmation: For emails with attachments or sensitive content, ALWAYS confirm with the user before sending.\n\n3. Multiple Recipients: When sending to multiple recipients, list all recipients clearly for confirmation.\n\n4. Subject Line: If no subject line is provided, ask the user to confirm a suggested subject.\n\n5. Draft Option: Always offer to save as draft instead of sending immediately for important emails."
+}

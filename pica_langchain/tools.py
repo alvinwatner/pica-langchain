@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from .client import PicaClient
 from .models import ExecuteParams, ActionToExecute
 from .logger import get_logger
+from .platform_rules import get_platform_rules
 
 logger = get_logger()
 
@@ -81,6 +82,18 @@ class GetActionKnowledgeTool(BaseTool):
         
         if response.success:
             logger.debug(f"Successfully retrieved knowledge for action: {response.action.title if response.action else 'unknown'}")
+            
+            # Get platform-specific rules
+            platform_rules = get_platform_rules(platform)
+            
+            # If we have platform-specific rules, add them to the response
+            if platform_rules:                
+                # Create a new dictionary from the response model
+                response_dict = response.model_dump()
+                # Add platform rules to the response
+                response_dict["platform_rules"] = platform_rules
+                logger.debug(f"Adding platform-specific rules for {platform} with rules {platform_rules}")
+                return json.dumps(response_dict, default=str)
         else:
             logger.warning(f"Failed to get knowledge for action ID: {action_id}: {response.message}")
         
