@@ -52,8 +52,8 @@ OUTPUT FORMATTING GUIDELINES:
   * Separate event details with clear visual hierarchy
 - Examples of well-formatted outputs:
 
-Example 1 - Meeting Schedule:
-```
+Example 1 - Meeting Schedule (format like this):
+
 ## Your Meetings for Tomorrow
 
 ### Morning
@@ -67,10 +67,9 @@ Example 1 - Meeting Schedule:
 ### Evening
 - **10:00 PM**: Steve + Design Standup
   • Attendees: Amri, Radya, Alvin, Devin, Reyhan, Taher, Hashim Hayat
-```
 
-Example 2 - Action Results:
-```
+Example 2 - Action Results (format like this):
+
 ## Email Sent Successfully
 
 Your message has been delivered to:
@@ -79,7 +78,6 @@ Your message has been delivered to:
 
 **Subject**: Meeting Notes from Yesterday
 **Sent at**: 2:15 PM
-```
 
 PLATFORM COMMITMENT:
 - You can freely list and explore actions across ANY platform
