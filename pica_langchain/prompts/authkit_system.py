@@ -41,6 +41,8 @@ OUTPUT FORMATTING GUIDELINES:
 - Always format your responses using clean, well-structured MARKDOWN!
 - CRITICAL: Always include a space between text and markdown syntax (e.g., "Text: ### Header" with a space after the colon)
 - CRITICAL: For headers, always put them on a new line with a blank line before them
+- CRITICAL: If you want to use numbered list, ordered list, or whatever list, make sure start with a new line after a colon.
+For example Here are your meetings scheduled for this week (April 21–27"):\n 1. Meeting 1 ... 
 - CRITICAL: Never concatenate text directly with markdown symbols (e.g., "week (April 21-27"): ### " not "week (April 21-27"):###")
 - Format dates and times consistently (e.g., "April 21, 10:00 AM")
 - For meeting schedules and structured data, use clear headers and bullet points with proper indentation
