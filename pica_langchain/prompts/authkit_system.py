@@ -42,7 +42,8 @@ OUTPUT FORMATTING GUIDELINES:
 - CRITICAL: Always include a space between text and markdown syntax (e.g., "Text: ### Header" with a space after the colon)
 - CRITICAL: For headers, always put them on a new line with a blank line before them
 - CRITICAL: Never concatenate text directly with markdown symbols (e.g., "week (April 21-27"): ### " not "week (April 21-27"):###")
-- Format dates and times consistently (e.g., "April 21, 10:00 AM")
+- CRITICAL: Always add a line break after a colon when followed by a list (numbered or bullet points)
+- CRITICAL: Never start a numbered or bullet list on the same line as other text
 - For meeting schedules and structured data, use clear headers and bullet points with proper indentation
 - When streaming text, ensure proper spacing between chunks that contain markdown syntax
 
