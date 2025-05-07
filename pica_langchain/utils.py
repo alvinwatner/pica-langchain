@@ -7,7 +7,8 @@ from langchain.llms.base import BaseLLM
 from langchain.chat_models.base import BaseChatModel
 
 from .client import PicaClient
-from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool
+from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool, GenerateStacUITool
+from .callbacks import AutoGenerateStacUIHandler
 
 warnings.filterwarnings("ignore", category=LangChainDeprecationWarning)
 
@@ -24,7 +25,8 @@ def create_pica_tools(client: PicaClient) -> List[BaseTool]:
     tools: List[BaseTool] = [
         GetAvailableActionsTool(client=client),
         GetActionKnowledgeTool(client=client),
-        ExecuteTool(client=client)
+        ExecuteTool(client=client),
+        GenerateStacUITool(client=client)
     ]
     
     # Add the PromptToConnectPlatformTool if AuthKit is enabled
@@ -42,6 +44,7 @@ def create_pica_agent(
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
+    auto_generate_stac_ui: bool = True,
     **kwargs
 ):
     """
@@ -64,11 +67,20 @@ def create_pica_agent(
     
     # Create default Pica tools
     pica_tools = create_pica_tools(client)
+
+    print("all pica tools = ", pica_tools)
     
     # Combine default tools with any user-provided tools
     all_tools = pica_tools
     if tools:
         all_tools = pica_tools + tools
+        
+    # Add the AutoGenerateStacUIHandler callback if enabled
+    callbacks = kwargs.get("callbacks", [])
+    if auto_generate_stac_ui:
+        auto_stac_handler = AutoGenerateStacUIHandler(all_tools)
+        callbacks.append(auto_stac_handler)
+        kwargs["callbacks"] = callbacks
     
     # Generate system prompt with Pica information
     if system_prompt:
@@ -96,7 +108,7 @@ def create_pica_agent(
         default_agent_kwargs.update(agent_kwargs)
     
     # Create and return the agent
-    return initialize_agent(
+    agent = initialize_agent(
         all_tools,
         llm,
         agent=agent_type,
@@ -104,3 +116,5 @@ def create_pica_agent(
         agent_kwargs=default_agent_kwargs,
         **kwargs
     )
+    
+    return agent

@@ -107,7 +107,7 @@ Your capabilities must be used in this exact sequence FOR EACH EXECUTION:
     * HTTP method
     * Constraints and validation rules
 
-3. EXECUTE ACTIONS (ALWAYS LAST)
+3. EXECUTE ACTIONS (ALWAYS THIRD)
   - Command: ExecuteTool
   - Purpose: Execute specific platform actions through the passthrough API
   - When to use: Only after completing steps 1 and 2
@@ -122,6 +122,18 @@ Your capabilities must be used in this exact sequence FOR EACH EXECUTION:
     * isFormData: Set to true to send data as multipart/form-data
     * isFormUrlEncoded: Set to true to send data as application/x-www-form-urlencoded
 
+4. GENERATE STAC UI (ALWAYS FOURTH, OPTIONAL)
+  - Command: GenerateStacUITool
+  - Purpose: Generate a Flutter Server Driven UI (Stac) based on the API response from ExecuteTool
+  - When to use: After successfully executing an action with ExecuteTool
+  - Required: Must have a successful response from ExecuteTool
+  - Required Parameters:
+    * execute_response: The JSON response from ExecuteTool
+    * temperature: Optional temperature for the LLM call
+    * stream: Whether to stream the response
+  - Output: Returns a structured UI in Stac format for rendering in Flutter
+  - Note: This step is optional and should only be used when a dynamic UI is needed
+
 WORKFLOW (MUST FOLLOW THIS ORDER FOR EACH PLATFORM):
 1. For ANY user request:
   a. FIRST: Call GetAvailableActionsTool to list what's possible
@@ -130,8 +142,9 @@ WORKFLOW (MUST FOLLOW THIS ORDER FOR EACH PLATFORM):
      * IMPORTANT: If the response contains "platform_rules", you MUST carefully read and follow these platform-specific rules
      * These rules take precedence over general guidelines and are tailored to handle edge cases for this specific platform
   d. NEXT: Verify that the connection exists in the available connections list below in the IMPORTANT GUIDELINES section
-  e. FINALLY: Execute with proper parameters
-  f. Only after completing all steps, consider if another platform is needed
+  e. NEXT: Execute with proper parameters using ExecuteTool
+  f. OPTIONALLY: Generate a Flutter Server Driven UI using GenerateStacUITool if needed
+  g. Only after completing all steps, consider if another platform is needed
 
 2. Knowledge Parsing:
   - After getting knowledge, analyze it to understand:

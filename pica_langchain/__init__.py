@@ -5,8 +5,9 @@ This package provides tools and utilities for using Pica with LangChain.
 """
 
 from .client import PicaClient
-from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool
+from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool, GenerateStacUITool
 from .utils import create_pica_tools, create_pica_agent
+from .callbacks import AutoGenerateStacUIHandler
 from .models import (
     Connection,
     ConnectionDefinition,
@@ -19,6 +20,7 @@ from .models import (
 
 __all__ = [
     "PicaClient",
+    "AutoGenerateStacUIHandler",
     "GetAvailableActionsTool",
     "GetActionKnowledgeTool",
     "ExecuteTool",
