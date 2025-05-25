@@ -2,11 +2,13 @@
 Pica integration for LangChain.
 
 This package provides tools and utilities for using Pica with LangChain.
+It also includes Flutter UI generation capabilities.
 """
 
 from .client import PicaClient
+from .flutter_client import FlutterPicaClient
 from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool
-from .utils import create_pica_tools, create_pica_agent, get_tools_from_client
+from .utils import create_pica_tools, create_pica_agent, get_tools_from_client, create_flutter_ui_agent, FlutterUIAgent
 from .models import (
     Connection,
     ConnectionDefinition,
@@ -19,12 +21,15 @@ from .models import (
 
 __all__ = [
     "PicaClient",
+    "FlutterPicaClient",
     "GetAvailableActionsTool",
     "GetActionKnowledgeTool",
     "ExecuteTool",
     "PromptToConnectPlatformTool",
     "create_pica_tools",
     "create_pica_agent",
+    "create_flutter_ui_agent",
+    "FlutterUIAgent",
     "get_tools_from_client",
     "Connection",
     "ConnectionDefinition",
