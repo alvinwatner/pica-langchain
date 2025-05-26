@@ -11,6 +11,7 @@ from langchain.chat_models.base import BaseChatModel
 from .flutter_formatter import FlutterUIFormatter
 
 from .client import PicaClient
+from .prompts import generate_full_flutter_system_prompt
 from .tools import (
     GetAvailableActionsTool,
     GetActionKnowledgeTool,
@@ -150,6 +151,7 @@ def create_flutter_ui_agent(
     verbose: bool = False,
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
+    ui_formatter_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
     return_intermediate_steps: bool = False,
     **kwargs,
@@ -165,6 +167,9 @@ def create_flutter_ui_agent(
         verbose: Whether to enable verbose output.
         agent_kwargs: Additional arguments for the agent.
         system_prompt: Optional custom system prompt to prepend to the Flutter system prompt.
+        ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
+                           If provided, it will replace the default prompt template.
+                           The template should include placeholders for {agent_output} and {tool_usage_str}.
         tools: Optional list of additional tools to include alongside the Pica tools.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
         **kwargs: Additional arguments for initialize_agent.
@@ -179,44 +184,27 @@ def create_flutter_ui_agent(
     if tools:
         all_tools = all_tools + tools
 
-    # Get base system prompt from client
-    try:
-        loop = asyncio.get_running_loop()
-        # We're in an event loop, use the client.system property directly
-        base_system_prompt = client.system
-    except RuntimeError:
-        # No running event loop, safe to use asyncio.run()
-        base_system_prompt = asyncio.run(client.generate_system_prompt(""))
-        
-    # Add Flutter UI specific instructions
-    flutter_instructions = """
-    
-FLUTTER UI GENERATION GUIDELINES:
-- Your responses will be converted to Flutter server-driven UI JSON
-- Structure your responses with UI components in mind:
-  * Present data in a way that can be easily displayed in lists, cards, or other UI elements
-  * Organize information hierarchically for easy navigation
-  * Highlight important information that should be prominently displayed
-  * Consider mobile screen constraints when organizing information
-- When listing actions:
-  * Present them as a list of interactive items
-  * Group related actions together
-  * Include icons or visual indicators where appropriate
-  * Make sure each action is clearly distinguishable
-- When presenting API responses:
-  * Structure data in a way that can be easily mapped to UI components
-  * Use cards for complex data items
-  * Use lists for collections of similar items
-  * Use appropriate typography for different levels of information
-  * Include visual indicators for status information
-"""
-    combined_system_prompt = base_system_prompt + flutter_instructions
-    
     # Append the custom system prompt if provided
     if system_prompt:
-        from .prompts import generate_full_flutter_system_prompt
-        combined_system_prompt = generate_full_flutter_system_prompt(combined_system_prompt, system_prompt)
+        try:
+            loop = asyncio.get_running_loop()
+            combined_system_prompt = client.system
+            combined_system_prompt = generate_full_flutter_system_prompt(
+                combined_system_prompt, system_prompt
+            )            
 
+        except RuntimeError:
+        # No running event loop, safe to use asyncio.run()
+            combined_system_prompt = asyncio.run(
+                generate_full_flutter_system_prompt(system_prompt)
+            )     
+
+    else:
+        # If no custom prompt, use the default system prompt
+        combined_system_prompt = client.system                   
+
+    print(f'combined_system_prompt: {combined_system_prompt}')
+    
     default_agent_kwargs = {
         "system_message": combined_system_prompt,
         "return_intermediate_steps": return_intermediate_steps
@@ -237,7 +225,7 @@ FLUTTER UI GENERATION GUIDELINES:
     )
 
     # Wrap the agent with the Flutter UI formatter
-    return FlutterUIAgent(agent, flutter_llm)
+    return FlutterUIAgent(agent, flutter_llm, ui_formatter_prompt)
 
 
 class FlutterUIAgent:
@@ -245,16 +233,19 @@ class FlutterUIAgent:
     Agent wrapper that generates Flutter UI JSON from agent responses.
     """
     
-    def __init__(self, agent, flutter_llm: BaseChatModel):
+    def __init__(self, agent, flutter_llm: BaseChatModel, ui_formatter_prompt: Optional[str] = None):
         """
         Initialize the Flutter UI Agent.
         
         Args:
             agent: The LangChain agent to wrap.
             flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
+            ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
+                               If provided, it will replace the default prompt template.
+                               The template should include placeholders for {agent_output} and {tool_usage_str}.
         """
         self.agent = agent
-        self.formatter = FlutterUIFormatter(flutter_llm)
+        self.formatter = FlutterUIFormatter(flutter_llm, ui_formatter_prompt)
         
     def __call__(self, inputs, **kwargs):
         """

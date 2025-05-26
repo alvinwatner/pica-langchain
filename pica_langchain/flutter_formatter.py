@@ -19,14 +19,18 @@ class FlutterUIFormatter:
     OpenAI model to convert it into a Flutter server-driven UI JSON format.
     """
     
-    def __init__(self, flutter_llm: BaseChatModel):
+    def __init__(self, flutter_llm: BaseChatModel, ui_formatter_prompt: Optional[str] = None):
         """
         Initialize the Flutter UI formatter.
         
         Args:
             flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
+            ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
+                                 If provided, it will replace the default prompt template.
+                                 The template should include placeholders for {agent_output} and {tool_usage_str}.
         """
         self.flutter_llm = flutter_llm
+        self.ui_formatter_prompt = ui_formatter_prompt
         
     def format_to_ui(
         self,
@@ -62,6 +66,8 @@ class FlutterUIFormatter:
         
         # Create a prompt for the fine-tuned model
         prompt = self._create_ui_generation_prompt(agent_output, tool_usage)
+
+        print("flutter formatter prompt = ", prompt)
         
         # Generate Flutter UI JSON using the fine-tuned model
         try:
@@ -87,18 +93,24 @@ class FlutterUIFormatter:
         """
         tool_usage_str = json.dumps(tool_usage, indent=2) if tool_usage else "No tools were used"
         
-        return f"""
-        Convert the following agent response to a Flutter server-driven UI JSON:
-        
-        AGENT OUTPUT:
-        {agent_output}
-        
-        TOOL USAGE:
-        {tool_usage_str}
-        
-        Generate a Flutter server-driven UI JSON that represents this information in a user-friendly way.
-        The JSON should be valid and directly usable by a Flutter application.
-        """
+        # Use custom prompt if provided, otherwise use default
+        if self.ui_formatter_prompt:
+            return f"{self.ui_formatter_prompt} \n\n AGENT OUTPUT: {agent_output} \n\n TOOL USAGE: {tool_usage_str}"
+        else:
+            return f"""
+            Convert the following agent response to a Flutter server-driven UI JSON:
+            
+            AGENT OUTPUT:
+            {agent_output}
+            
+            TOOL USAGE:
+            {tool_usage_str}
+            
+            Generate a Flutter server-driven UI JSON that represents this information in a user-friendly way.
+            The JSON should be valid and directly usable by a Flutter application.
+
+            
+            """
     
     def _extract_json(self, response: str) -> Dict[str, Any]:
         """

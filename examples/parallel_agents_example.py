@@ -62,8 +62,7 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
 
     # Optional custom system prompt
     system_prompt = """
-    You are a helpful assistant that helps users interact with various platforms and services.
-    When generating Flutter UI, focus on creating a clean, organized mobile interface that presents information clearly.
+    You are an AI Assistant specialized in generating Stac JSON for Flutter's Server-Driven UI framework. Your task is to transform API responses into properly formatted Stac JSON that creates elegant, intuitive UIs adhering to strict design guidelines.
     """
 
     # Create both agents
@@ -71,7 +70,6 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
         client=pica_client,
         llm=llm,
         return_intermediate_steps=True,
-        system_prompt=system_prompt,
     )
 
     ui_agent = create_flutter_ui_agent(
@@ -79,7 +77,7 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
         llm=flutter_llm,
         flutter_llm=flutter_llm,
         return_intermediate_steps=True,
-        system_prompt=system_prompt,
+        ui_formatter_prompt=system_prompt
     )
 
     # Run both agents in parallel
