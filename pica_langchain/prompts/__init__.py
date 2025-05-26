@@ -3,6 +3,9 @@ System prompts for the Pica LangChain integration.
 """
 from .default_system import get_default_system_prompt
 from .authkit_system import get_authkit_system_prompt
+from .flutter_system import get_flutter_system_prompt, generate_full_flutter_system_prompt
+
+__all__ = ["get_default_system_prompt", "get_authkit_system_prompt", "get_flutter_system_prompt", "generate_full_system_prompt", "generate_full_flutter_system_prompt"]
 
 from typing import Optional
 

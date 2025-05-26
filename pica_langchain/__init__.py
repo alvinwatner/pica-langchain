@@ -6,7 +6,6 @@ It also includes Flutter UI generation capabilities.
 """
 
 from .client import PicaClient
-from .flutter_client import FlutterPicaClient
 from .tools import GetAvailableActionsTool, GetActionKnowledgeTool, ExecuteTool, PromptToConnectPlatformTool
 from .utils import create_pica_tools, create_pica_agent, get_tools_from_client, create_flutter_ui_agent, FlutterUIAgent
 from .models import (
@@ -21,7 +20,6 @@ from .models import (
 
 __all__ = [
     "PicaClient",
-    "FlutterPicaClient",
     "GetAvailableActionsTool",
     "GetActionKnowledgeTool",
     "ExecuteTool",
@@ -29,7 +27,6 @@ __all__ = [
     "create_pica_tools",
     "create_pica_agent",
     "create_flutter_ui_agent",
-    "FlutterUIAgent",
     "get_tools_from_client",
     "Connection",
     "ConnectionDefinition",

@@ -46,18 +46,24 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
     await pica_client.async_initialize()
 
     # Create language models
-    llm = ChatOpenAI(temperature=0, model="gpt-4", streaming=True)
+    llm = ChatOpenAI(
+        temperature=0,
+        model="gpt-4",
+        streaming=True,
+    )
 
     # Create a fine-tuned model for Flutter UI generation
+    # Replace "ft:gpt-3.5-turbo-xxxx" with your actual fine-tuned model ID
     flutter_llm = ChatOpenAI(
         temperature=0,
         model="ft:gpt-4.1-2025-04-14:steve:stac:BWImQZFZ",
-        streaming=False,
+        streaming=False,  # No streaming for the UI generation
     )
 
     # Optional custom system prompt
     system_prompt = """
     You are a helpful assistant that helps users interact with various platforms and services.
+    When generating Flutter UI, focus on creating a clean, organized mobile interface that presents information clearly.
     """
 
     # Create both agents
@@ -70,7 +76,7 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
 
     ui_agent = create_flutter_ui_agent(
         client=pica_client,
-        llm=llm,
+        llm=flutter_llm,
         flutter_llm=flutter_llm,
         return_intermediate_steps=True,
         system_prompt=system_prompt,

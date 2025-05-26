@@ -7,7 +7,8 @@ from langchain.tools import BaseTool
 from langchain.agents import AgentType, initialize_agent
 from langchain.llms.base import BaseLLM
 from langchain.chat_models.base import BaseChatModel
-from langchain.schema import AgentAction, AgentFinish
+
+from .flutter_formatter import FlutterUIFormatter
 
 from .client import PicaClient
 from .tools import (
@@ -18,7 +19,7 @@ from .tools import (
 )
 
 from .logger import get_logger
-from .flutter_formatter import FlutterUIFormatter
+
 
 warnings.filterwarnings("ignore", category=LangChainDeprecationWarning)
 
@@ -141,6 +142,104 @@ def create_pica_agent(
     )
 
 
+def create_flutter_ui_agent(
+    client: PicaClient,
+    llm: Union[BaseLLM, BaseChatModel],
+    flutter_llm: BaseChatModel,
+    agent_type: AgentType = AgentType.OPENAI_FUNCTIONS,
+    verbose: bool = False,
+    agent_kwargs: Optional[Dict[str, Any]] = None,
+    system_prompt: Optional[str] = None,
+    tools: Optional[List[BaseTool]] = None,
+    return_intermediate_steps: bool = False,
+    **kwargs,
+):
+    """
+    Create a Flutter UI agent with Pica tools.
+
+    Args:
+        client: The Pica client to use.
+        llm: The language model to use for the agent's reasoning and tool usage.
+        flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
+        agent_type: The type of agent to create.
+        verbose: Whether to enable verbose output.
+        agent_kwargs: Additional arguments for the agent.
+        system_prompt: Optional custom system prompt to prepend to the Flutter system prompt.
+        tools: Optional list of additional tools to include alongside the Pica tools.
+        return_intermediate_steps: Whether to return intermediate steps in the agent's output.
+        **kwargs: Additional arguments for initialize_agent.
+
+    Returns:
+        A Flutter UI agent.
+    """
+    # Create default Pica tools
+    all_tools = get_tools_from_client(client)
+
+    # Combine default tools with any user-provided tools
+    if tools:
+        all_tools = all_tools + tools
+
+    # Get base system prompt from client
+    try:
+        loop = asyncio.get_running_loop()
+        # We're in an event loop, use the client.system property directly
+        base_system_prompt = client.system
+    except RuntimeError:
+        # No running event loop, safe to use asyncio.run()
+        base_system_prompt = asyncio.run(client.generate_system_prompt(""))
+        
+    # Add Flutter UI specific instructions
+    flutter_instructions = """
+    
+FLUTTER UI GENERATION GUIDELINES:
+- Your responses will be converted to Flutter server-driven UI JSON
+- Structure your responses with UI components in mind:
+  * Present data in a way that can be easily displayed in lists, cards, or other UI elements
+  * Organize information hierarchically for easy navigation
+  * Highlight important information that should be prominently displayed
+  * Consider mobile screen constraints when organizing information
+- When listing actions:
+  * Present them as a list of interactive items
+  * Group related actions together
+  * Include icons or visual indicators where appropriate
+  * Make sure each action is clearly distinguishable
+- When presenting API responses:
+  * Structure data in a way that can be easily mapped to UI components
+  * Use cards for complex data items
+  * Use lists for collections of similar items
+  * Use appropriate typography for different levels of information
+  * Include visual indicators for status information
+"""
+    combined_system_prompt = base_system_prompt + flutter_instructions
+    
+    # Append the custom system prompt if provided
+    if system_prompt:
+        from .prompts import generate_full_flutter_system_prompt
+        combined_system_prompt = generate_full_flutter_system_prompt(combined_system_prompt, system_prompt)
+
+    default_agent_kwargs = {
+        "system_message": combined_system_prompt,
+        "return_intermediate_steps": return_intermediate_steps
+    }
+
+    # Merge default agent kwargs with user-provided ones
+    if agent_kwargs:
+        default_agent_kwargs.update(agent_kwargs)
+
+    # Create the base agent
+    agent = initialize_agent(
+        all_tools,
+        llm,
+        agent=agent_type,
+        verbose=verbose,
+        agent_kwargs=default_agent_kwargs,
+        **kwargs,
+    )
+
+    # Wrap the agent with the Flutter UI formatter
+    return FlutterUIAgent(agent, flutter_llm)
+
+
 class FlutterUIAgent:
     """
     Agent wrapper that generates Flutter UI JSON from agent responses.
@@ -232,84 +331,3 @@ class FlutterUIAgent:
             A dictionary containing the Flutter UI JSON.
         """
         return await self.acall({"input": input_text}, **kwargs)
-
-
-def create_flutter_ui_agent(
-    client: PicaClient,
-    llm: Union[BaseLLM, BaseChatModel],
-    flutter_llm: BaseChatModel,
-    agent_type: AgentType = AgentType.OPENAI_FUNCTIONS,
-    verbose: bool = False,
-    agent_kwargs: Optional[Dict[str, Any]] = None,
-    system_prompt: Optional[str] = None,
-    tools: Optional[List[BaseTool]] = None,
-    return_intermediate_steps: bool = False,
-    **kwargs,
-):
-    """
-    Create a Flutter UI agent with Pica tools.
-
-    Args:
-        client: The Pica client to use.
-        llm: The language model to use for the agent's reasoning and tool usage.
-        flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
-        agent_type: The type of agent to create.
-        verbose: Whether to enable verbose output.
-        agent_kwargs: Additional arguments for the agent.
-        system_prompt: Optional custom system prompt to prepend to the Flutter system prompt.
-        tools: Optional list of additional tools to include alongside the Pica tools.
-        return_intermediate_steps: Whether to return intermediate steps in the agent's output.
-        **kwargs: Additional arguments for initialize_agent.
-
-    Returns:
-        A Flutter UI agent.
-    """
-    # Create default Pica tools
-    all_tools = get_tools_from_client(client)
-
-    # Combine default tools with any user-provided tools
-    if tools:
-        all_tools = all_tools + tools
-
-    # Get the system prompt from the client
-    if hasattr(client, 'system'):
-        combined_system_prompt = client.system
-    else:
-        # If client.system is not available, use the default system prompt
-        combined_system_prompt = "You are a helpful assistant that helps users interact with various platforms and services."
-        
-    # Append Flutter UI specific instructions
-    flutter_instructions = """
-    
-FLUTTER UI GENERATION INSTRUCTIONS:
-When processing user requests, remember that your responses will be converted to Flutter UI JSON.
-Consider how information should be visually presented to the user in a mobile interface.
-Focus on providing structured data that can be easily transformed into UI components.
-"""
-    combined_system_prompt += flutter_instructions
-    
-    # Append the custom system prompt if provided
-    if system_prompt:
-        combined_system_prompt = f"{combined_system_prompt}\n\n{system_prompt}"
-
-    default_agent_kwargs = {
-        "system_message": combined_system_prompt,
-        "return_intermediate_steps": return_intermediate_steps
-    }
-
-    # Merge default agent kwargs with user-provided ones
-    if agent_kwargs:
-        default_agent_kwargs.update(agent_kwargs)
-
-    # Create the base agent
-    agent = initialize_agent(
-        all_tools,
-        llm,
-        agent=agent_type,
-        verbose=verbose,
-        agent_kwargs=default_agent_kwargs,
-        **kwargs,
-    )
-
-    # Wrap the agent with the Flutter UI formatter
-    return FlutterUIAgent(agent, flutter_llm)
