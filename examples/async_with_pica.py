@@ -8,6 +8,7 @@ import sys
 import asyncio
 
 from langchain_openai import ChatOpenAI
+from langchain_anthropic import ChatAnthropic
 from langchain.agents import AgentType
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from pica_langchain import PicaClient, create_pica_agent
@@ -47,6 +48,12 @@ async def main():
             streaming=True,
             callbacks=[StreamingStdOutCallbackHandler()]
         )
+        # llm = ChatAnthropic(
+        #         model="claude-3-5-sonnet-20240620",
+        #         api_key="",
+        #         streaming=True,
+        #         callbacks=[StreamingStdOutCallbackHandler()]
+        #     )
 
         # Create a Pica agent with the LLM
         # This will now handle the system_prompt correctly in an async context

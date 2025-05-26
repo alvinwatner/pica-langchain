@@ -13,16 +13,30 @@ from pica_langchain.models import PicaClientOptions
 
 # Configure MCP servers
 mcp_options = {
-    "math": {
-        "command": "python",
-        "args": ["./examples/mcp_server/math_server.py"],
-        "transport": "stdio",
-    },
-    "weather": {
-        "url": "http://0.0.0.0:8000/sse",
+    "youtube": {
+        "url": "https://mcp.zapier.com/api/mcp/s/MzgwOTJhMzItMTIxMC00N2I2LWI0OTctNzM2Zjc3NWI2ZWRkOjllYzVkZDhiLWI3MjQtNDJjZi04NmZkLTU3YTlmZmYwMmY3ZA==/sse",
         "transport": "sse",
     }
+    # "KlavisReportGen": {
+    #     "url": "https://klavis-reportgen-mcp-server.klavis.ai/sse?instance_id=04080015-04d4-48dd-b8d0-6c6a6ca17b80",
+    #     "transport": "sse",
+    # },
+    # "steve-tasks": {
+    #     "command": "/bin/bash",
+    #     "args": ["/Users/alvin/Projects/steve-mcp/run_steve_mcp.sh"],
+    #     "transport": "stdio",
+    # },
+    # "math": {
+    #     "command": "python",
+    #     "args": ["./examples/mcp_server/math_server.py"],
+    #     "transport": "stdio",
+    # },
+    # "weather": {
+    #     "url": "http://0.0.0.0:8000/sse",
+    #     "transport": "sse",
+    # }
 }
+
 
 def get_env_var(name: str) -> str:
     """Get environment variable or exit if not set."""
@@ -60,12 +74,18 @@ async def main():
     def handle_sigterm(*args):
         print("\nReceived shutdown signal. Cleaning up...")
         sys.exit(0)
-        
+
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)
 
     result = await agent.ainvoke(
-        {"input": ("First, calculate 25 * 17, then check weather in New York, finally list all connectors Pica supported")}
+        {
+            "input": ("Can you help me to retrieve batch of contact in hubspot?")
+            # "input": ("Can you check what tasks I have?")
+            # "input": (
+            #     "First, calculate 25 * 17, then check weather in New York, finally list all connectors Pica supported"
+            # )
+        }
     )
 
     print(f"\nWorkflow Result:\n {result}")

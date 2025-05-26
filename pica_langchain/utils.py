@@ -1,6 +1,6 @@
 import warnings
+import asyncio
 from typing import List, Optional, Dict, Any, Union
-
 
 from langchain_core._api.deprecation import LangChainDeprecationWarning
 from langchain.tools import BaseTool
@@ -8,7 +8,10 @@ from langchain.agents import AgentType, initialize_agent
 from langchain.llms.base import BaseLLM
 from langchain.chat_models.base import BaseChatModel
 
+from .flutter_formatter import FlutterUIFormatter
+
 from .client import PicaClient
+from .prompts import generate_full_flutter_system_prompt
 from .tools import (
     GetAvailableActionsTool,
     GetActionKnowledgeTool,
@@ -17,6 +20,7 @@ from .tools import (
 )
 
 from .logger import get_logger
+
 
 warnings.filterwarnings("ignore", category=LangChainDeprecationWarning)
 
@@ -137,3 +141,184 @@ def create_pica_agent(
         agent_kwargs=default_agent_kwargs,
         **kwargs,
     )
+
+
+def create_flutter_ui_agent(
+    client: PicaClient,
+    llm: Union[BaseLLM, BaseChatModel],
+    flutter_llm: BaseChatModel,
+    agent_type: AgentType = AgentType.OPENAI_FUNCTIONS,
+    verbose: bool = False,
+    agent_kwargs: Optional[Dict[str, Any]] = None,
+    system_prompt: Optional[str] = None,
+    ui_formatter_prompt: Optional[str] = None,
+    tools: Optional[List[BaseTool]] = None,
+    return_intermediate_steps: bool = False,
+    **kwargs,
+):
+    """
+    Create a Flutter UI agent with Pica tools.
+
+    Args:
+        client: The Pica client to use.
+        llm: The language model to use for the agent's reasoning and tool usage.
+        flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
+        agent_type: The type of agent to create.
+        verbose: Whether to enable verbose output.
+        agent_kwargs: Additional arguments for the agent.
+        system_prompt: Optional custom system prompt to prepend to the Flutter system prompt.
+        ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
+                           If provided, it will replace the default prompt template.
+                           The template should include placeholders for {agent_output} and {tool_usage_str}.
+        tools: Optional list of additional tools to include alongside the Pica tools.
+        return_intermediate_steps: Whether to return intermediate steps in the agent's output.
+        **kwargs: Additional arguments for initialize_agent.
+
+    Returns:
+        A Flutter UI agent.
+    """
+    # Create default Pica tools
+    all_tools = get_tools_from_client(client)
+
+    # Combine default tools with any user-provided tools
+    if tools:
+        all_tools = all_tools + tools
+
+    # Append the custom system prompt if provided
+    if system_prompt:
+        try:
+            loop = asyncio.get_running_loop()
+            combined_system_prompt = client.system
+            combined_system_prompt = generate_full_flutter_system_prompt(
+                combined_system_prompt, system_prompt
+            )            
+
+        except RuntimeError:
+        # No running event loop, safe to use asyncio.run()
+            combined_system_prompt = asyncio.run(
+                generate_full_flutter_system_prompt(system_prompt)
+            )     
+
+    else:
+        # If no custom prompt, use the default system prompt
+        combined_system_prompt = client.system                   
+
+    print(f'combined_system_prompt: {combined_system_prompt}')
+    
+    default_agent_kwargs = {
+        "system_message": combined_system_prompt,
+        "return_intermediate_steps": return_intermediate_steps
+    }
+
+    # Merge default agent kwargs with user-provided ones
+    if agent_kwargs:
+        default_agent_kwargs.update(agent_kwargs)
+
+    # Create the base agent
+    agent = initialize_agent(
+        all_tools,
+        llm,
+        agent=agent_type,
+        verbose=verbose,
+        agent_kwargs=default_agent_kwargs,
+        **kwargs,
+    )
+
+    # Wrap the agent with the Flutter UI formatter
+    return FlutterUIAgent(agent, flutter_llm, ui_formatter_prompt)
+
+
+class FlutterUIAgent:
+    """
+    Agent wrapper that generates Flutter UI JSON from agent responses.
+    """
+    
+    def __init__(self, agent, flutter_llm: BaseChatModel, ui_formatter_prompt: Optional[str] = None):
+        """
+        Initialize the Flutter UI Agent.
+        
+        Args:
+            agent: The LangChain agent to wrap.
+            flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
+            ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
+                               If provided, it will replace the default prompt template.
+                               The template should include placeholders for {agent_output} and {tool_usage_str}.
+        """
+        self.agent = agent
+        self.formatter = FlutterUIFormatter(flutter_llm, ui_formatter_prompt)
+        
+    def __call__(self, inputs, **kwargs):
+        """
+        Run the agent and format the output as Flutter UI JSON.
+        
+        Args:
+            inputs: The inputs to pass to the agent.
+            **kwargs: Additional arguments to pass to the agent.
+            
+        Returns:
+            A dictionary containing the Flutter UI JSON.
+        """
+        # Run the original agent
+        result = self.agent(inputs, **kwargs)
+        
+        # Extract the output and intermediate steps
+        output = result.get("output", "")
+        intermediate_steps = result.get("intermediate_steps", [])
+        
+        # Format the output to Flutter UI JSON
+        ui_json = self.formatter.format_to_ui(output, intermediate_steps)
+        
+        # Return both the original result and the UI JSON
+        result["ui_json"] = ui_json
+        return result
+    
+    async def acall(self, inputs, **kwargs):
+        """
+        Asynchronously run the agent and format the output as Flutter UI JSON.
+        
+        Args:
+            inputs: The inputs to pass to the agent.
+            **kwargs: Additional arguments to pass to the agent.
+            
+        Returns:
+            A dictionary containing the Flutter UI JSON.
+        """
+        # Run the original agent asynchronously
+        result = await self.agent.acall(inputs, **kwargs)
+        
+        # Extract the output and intermediate steps
+        output = result.get("output", "")
+        intermediate_steps = result.get("intermediate_steps", [])
+        
+        # Format the output to Flutter UI JSON
+        ui_json = self.formatter.format_to_ui(output, intermediate_steps)
+        
+        # Return both the original result and the UI JSON
+        result["ui_json"] = ui_json
+        return result
+    
+    def run(self, input_text: str, **kwargs):
+        """
+        Run the agent with a simple string input.
+        
+        Args:
+            input_text: The input text from the user.
+            **kwargs: Additional arguments to pass to the agent.
+            
+        Returns:
+            A dictionary containing the Flutter UI JSON.
+        """
+        return self({"input": input_text}, **kwargs)
+    
+    async def arun(self, input_text: str, **kwargs):
+        """
+        Asynchronously run the agent with a simple string input.
+        
+        Args:
+            input_text: The input text from the user.
+            **kwargs: Additional arguments to pass to the agent.
+            
+        Returns:
+            A dictionary containing the Flutter UI JSON.
+        """
+        return await self.acall({"input": input_text}, **kwargs)
