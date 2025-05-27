@@ -219,93 +219,70 @@ class PicaClient:
 
         logger.info(f"System prompt generated with MCP tools info")
 
-    @classmethod
-    async def create(cls, secret: str, options: Optional[PicaClientOptions] = None):
-        """
-        Factory method to create and initialize a PicaClient with async support.
+    @property
+    def connections_info(self) -> str:
+        """Get formatted information about available connections."""
+        filtered_connections = [conn for conn in self.connections if conn.active]
+        if self._connectors_filter:
+            filtered_connections = [
+                conn for conn in filtered_connections 
+                if conn.key in self._connectors_filter
+            ]
         
-        Args:
-            secret: The API secret for Pica.
-            options: Optional configuration parameters.
+        return (
+            "\t* " + "\n\t* ".join([
+                f"{conn.platform} - Key: {conn.key}" 
+                for conn in filtered_connections
+            ])
+            if filtered_connections 
+            else "No connections available"
+        )
+
+    @property
+    def available_platforms_info(self) -> str:
+        """Get formatted information about available platforms."""
+        return "\n\t* ".join([
+            f"{def_.platform} ({def_.name})"
+            for def_ in self.connection_definitions
+        ])
+
+    @property
+    def mcp_tools_info(self) -> str:
+        """Get formatted information about available MCP tools."""
+        if not self.mcp_tools:
+            return ""
             
-        Returns:
-            An initialized PicaClient instance.
-        """
-        client = cls(secret, options)
-        await client.async_initialize()
-        return client
-    
-    def _initialize_connections(self) -> None:
-        """Fetch connections from the API."""
-        try:
-            logger.debug("Fetching connections from API")
-            
-            params: Dict[str, Any] = {}
-            
-            if self._identity_filter:
-                params["identity"] = self._identity_filter
+        mcp_tools_list = []
+        for tool in self.mcp_tools:
+            # Format each tool with its name, description, and parameters
+            params_info = ""
+            if hasattr(tool, 'parameter_schema') and tool.parameter_schema:
+                required_params = tool.parameter_schema.get('required', [])
+                properties = tool.parameter_schema.get('properties', {})
                 
-            if self._identity_type_filter:
-                params["identityType"] = self._identity_type_filter
-            
-            try:
-                # Use the pagination method to handle pagination properly
-                connections_data = self._paginate_results(
-                    self.get_connection_url,
-                    params=params
-                )
+                param_details = []
+                for param_name, param_info in properties.items():
+                    is_required = param_name in required_params
+                    param_type = param_info.get('type', 'unknown')
+                    param_desc = param_info.get('description', '')
+                    
+                    if is_required:
+                        param_details.append(f"{param_name} ({param_type}, REQUIRED): {param_desc}")
+                    else:
+                        param_details.append(f"{param_name} ({param_type}, optional): {param_desc}")
                 
-                self.connections = [Connection(**conn) for conn in connections_data]
-                logger.info(f"Successfully fetched {len(self.connections)} connections")
-            except Exception as e:
-                logger.error(f"Failed to paginate connections: {e}", exc_info=True)
-                raise
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize connections: {e}", exc_info=True)
-            print(f"Failed to initialize connections: {e}")
-            self.connections = []
-    
-    def _initialize_connection_definitions(self) -> None:
-        """Fetch available connectors from the API."""
-        try:
-            logger.debug("Fetching available connectors from API")
+                if param_details:
+                    params_info = "\n    Parameters:\n    - " + "\n    - ".join(param_details)
             
-            params: Dict[str, Any] = {}
-            
-            # Add authkit parameter if enabled
-            if self._use_authkit:
-                params["authkit"] = "true"
-                logger.debug("Adding authkit=true parameter to available connectors request")
-            
-            try:
-                # Use the pagination method to handle pagination properly
-                connectors_data = self._paginate_results(
-                    self.get_available_connectors_url,
-                    params=params
-                )
-                
-                self.connection_definitions = [
-                    ConnectionDefinition(**def_) 
-                    for def_ in connectors_data
-                ]
-                logger.info(f"Successfully fetched {len(self.connection_definitions)} available connectors")
-            except Exception as e:
-                logger.error(f"Failed to paginate available connectors: {e}", exc_info=True)
-                raise
-                
-        except Exception as e:
-            logger.error(f"Failed to initialize available connectors: {e}", exc_info=True)
-            print(f"Failed to initialize available connectors: {e}")
-            self.connection_definitions = []
-    
-    def _generate_headers(self) -> Dict[str, str]:
-        """Generate headers for API requests."""
-        return {
-            "Content-Type": "application/json",
-            "x-pica-secret": self.secret,
-        }        
-    
+            mcp_tools_list.append(f"- {tool.name}: {tool.description}{params_info}")
+        
+        return "\n".join(mcp_tools_list)        
+
+    @property
+    def system(self) -> str:
+        """Get the complete system prompt with all necessary information."""
+        return self._system_prompt
+
     async def generate_system_prompt(self, user_system_prompt: Optional[str] = None) -> str:
         """
         Generate a system prompt for use with LLMs.
@@ -321,226 +298,34 @@ class PicaClient:
         
         return generate_full_system_prompt(self._system_prompt, user_system_prompt)
     
+    async def generate_custom_system_prompt(self, user_system_prompt: str, override_default: bool = False) -> str:
+        """
+        Generate a custom system prompt for use with LLMs.
+        
+        Args:
+            user_system_prompt: Custom system prompt to use.
+            override_default: If True, completely replaces the default system prompt with the provided system_prompt.
+                             Only the connection information will be appended.
+            
+        Returns:
+            The custom system prompt including necessary Pica connection information.
+        """
+        if not self._initialized:
+            self.initialize()
+        
+        if override_default:
+            # Format the user's system prompt with the connection info
+            return f"{user_system_prompt}\n\nAvailable Connections:\n{self.connections_info}\n\nAvailable Platforms:\n{self.available_platforms_info}\n\nAvailable MCP Tools:\n{self.mcp_tools_info}"
+
+        else:
+            # Use the standard behavior
+            return generate_full_system_prompt(self._system_prompt, user_system_prompt)
+    
     @property
     def system(self) -> str:
         """Get the current system prompt."""
         return self._system_prompt
     
-    def _paginate_results(
-        self, 
-        url: str, 
-        params: Optional[Dict[str, Any]] = None, 
-        limit: int = 100
-    ) -> List[Dict[str, Any]]:
-        """
-        Paginate through API results.
-        
-        Args:
-            url: The API endpoint URL.
-            params: Query parameters to include in the request.
-            limit: The number of results to fetch per page.
-            
-        Returns:
-            A list of all results.
-        """
-        params = params or {}
-        skip = 0
-        all_results = []
-        total = 0
-        
-        try:
-            while True:
-                current_params = {
-                    **params,
-                    "skip": skip,
-                    "limit": limit
-                }
-
-                response = requests.get(
-                    url, 
-                    params=current_params, 
-                    headers=self._generate_headers()
-                )
-                response.raise_for_status()
-                data = response.json()
-                
-                rows = data.get("rows", [])
-                total = data.get("total", 0)
-                all_results.extend(rows)
-                
-                skip += limit
-                if len(all_results) >= total:
-                    break
-                
-            return all_results
-        except Exception as e:
-            print(f"Error in pagination: {e}")
-            raise
-    
-    def get_all_available_actions(self, platform: str) -> List[AvailableAction]:
-        """
-        Get all available actions for a platform.
-        
-        Args:
-            platform: The platform to get actions for.
-            
-        Returns:
-            A list of available actions.
-        """
-        try:
-            params = {
-                "supported": "true",
-                "connectionPlatform": platform
-            }
-            
-            actions_data = self._paginate_results(
-                self.available_actions_url,
-                params=params
-            )
-            
-            return [AvailableAction(**action) for action in actions_data]
-        except Exception as e:
-            print(f"Error fetching all available actions: {e}")
-            raise ValueError("Failed to fetch all available actions")
-    
-    def get_single_action(self, action_id: str) -> AvailableAction:
-        """
-        Get a single action by ID.
-        
-        Args:
-            action_id: The ID of the action to get.
-            
-        Returns:
-            The requested action.
-        """
-        try:
-            logger.debug(f"Fetching action with ID: {action_id}")
-            params = {"_id": action_id}
-            
-            log_request_response("GET", self.available_actions_url, request_data=params)
-            response = requests.get(
-                self.available_actions_url,
-                params=params,
-                headers=self._generate_headers()
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            log_request_response("GET", self.available_actions_url, 
-                                request_data=params,
-                                response_status=response.status_code, 
-                                response_data={"rows_count": len(data.get("rows", []))})
-            
-            if not data.get("rows") or len(data["rows"]) == 0:
-                logger.warning(f"Action with ID {action_id} not found")
-                raise ValueError(f"Action with ID {action_id} not found")
-            
-            action = AvailableAction(**data["rows"][0])
-            logger.debug(f"Successfully fetched action: {action.title}")
-            return action
-        except Exception as e:
-            logger.error(f"Error fetching single action: {e}", exc_info=True)
-            print(f"Error fetching single action: {e}")
-            raise ValueError("Failed to fetch action")
-    
-    def get_available_actions(self, platform: str) -> ActionsResponse:
-        """
-        Get available actions for a platform.
-        
-        Args:
-            platform: The platform to get actions for.
-            
-        Returns:
-            A response containing the available actions.
-        """
-        try:
-            logger.info(f"Fetching available actions for platform: {platform}")
-            all_actions = self.get_all_available_actions(platform)
-            
-            simplified_actions = [
-                {
-                    "_id": action._id if action._id else action.model_dump().get("_id"),
-                    "title": action.title,
-                    "tags": action.tags
-                }
-                for action in all_actions
-            ]
-            
-            # Include relevant MCP tools based on a generic matching approach
-            # This is a more dynamic approach that doesn't rely on hardcoded platform names
-            if self.mcp_tools:
-                platform_terms = platform.lower().split()
-                platform_terms.append(platform.lower())  # Add the full platform name as well
-                
-                # Find any MCP tools that might match the platform name or related terms
-                for tool in self.mcp_tools:
-                    tool_name = tool.name.lower()
-                    tool_desc = tool.description.lower() if hasattr(tool, 'description') else ""
-                    
-                    # Check if any platform term appears in the tool name or description
-                    if any(term in tool_name or term in tool_desc for term in platform_terms):
-                        simplified_actions.append({
-                            "_id": f"mcp_{tool.name}",
-                            "title": tool.name,
-                            "tags": ["MCP", "Tool"]
-                        })
-
-            logger.info(f"Found {len(simplified_actions)} available actions for {platform}")
-            return ActionsResponse(
-                success=True,
-                actions=simplified_actions,
-                platform=platform,
-                content=f"Found {len(simplified_actions)} available actions for {platform}"
-            )
-        except Exception as e:
-            logger.error(f"Error fetching available actions for {platform}: {e}", exc_info=True)
-            print(f"Error fetching available actions: {e}")
-            return ActionsResponse(
-                success=False,
-                title="Failed to get available actions",
-                message=str(e),
-                raw=str(e)
-            )
-    
-    def get_action_knowledge(self, platform: str, action_id: str) -> ActionKnowledgeResponse:
-        """
-        Get knowledge about a specific action.
-        
-        Args:
-            platform: The platform the action belongs to.
-            action_id: The ID of the action.
-            
-        Returns:
-            A response containing the action knowledge.
-        """
-        try:
-            action = self.get_single_action(action_id)
-            
-            return ActionKnowledgeResponse(
-                success=True,
-                action=action,
-                platform=platform,
-                content=f"Found knowledge for action: {action.title}"
-            )
-        except Exception as e:
-            print(f"Error getting action knowledge: {e}")
-            return ActionKnowledgeResponse(
-                success=False,
-                platform=platform,
-                title="Failed to get action knowledge",
-                message=str(e),
-                raw=str(e)
-            )
-
-    def get_mcp_tools(self) -> List[BaseTool]:
-        """
-        Get tools from connected MCP servers.
-        
-        Returns:
-            List of LangChain tools from MCP servers.
-        """
-        return self.mcp_tools    
-
     def _replace_path_variables(
         self, 
         path: str, 
@@ -715,3 +500,305 @@ class PicaClient:
                 message=str(e),
                 raw=str(e)
             )
+    
+    def get_all_available_actions(self, platform: str) -> List[AvailableAction]:
+        """
+        Get all available actions for a platform.
+        
+        Args:
+            platform: The platform to get actions for.
+            
+        Returns:
+            A list of available actions.
+        """
+        try:
+            params = {
+                "supported": "true",
+                "connectionPlatform": platform
+            }
+            
+            actions_data = self._paginate_results(
+                self.available_actions_url,
+                params=params
+            )
+            
+            return [AvailableAction(**action) for action in actions_data]
+        except Exception as e:
+            print(f"Error fetching all available actions: {e}")
+            raise ValueError("Failed to fetch all available actions")
+    
+    def get_single_action(self, action_id: str) -> AvailableAction:
+        """
+        Get a single action by ID.
+        
+        Args:
+            action_id: The ID of the action to get.
+            
+        Returns:
+            The requested action.
+        """
+        try:
+            logger.debug(f"Fetching action with ID: {action_id}")
+            params = {"_id": action_id}
+            
+            log_request_response("GET", self.available_actions_url, request_data=params)
+            response = requests.get(
+                self.available_actions_url,
+                params=params,
+                headers=self._generate_headers()
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            log_request_response("GET", self.available_actions_url, 
+                                request_data=params,
+                                response_status=response.status_code, 
+                                response_data={"rows_count": len(data.get("rows", []))})
+            
+            if not data.get("rows") or len(data["rows"]) == 0:
+                logger.warning(f"Action with ID {action_id} not found")
+                raise ValueError(f"Action with ID {action_id} not found")
+            
+            action = AvailableAction(**data["rows"][0])
+            logger.debug(f"Successfully fetched action: {action.title}")
+            return action
+        except Exception as e:
+            logger.error(f"Error fetching single action: {e}", exc_info=True)
+            print(f"Error fetching single action: {e}")
+            raise ValueError("Failed to fetch action")
+    
+    def get_available_actions(self, platform: str) -> ActionsResponse:
+        """
+        Get available actions for a platform.
+        
+        Args:
+            platform: The platform to get actions for.
+            
+        Returns:
+            A response containing the available actions.
+        """
+        try:
+            logger.info(f"Fetching available actions for platform: {platform}")
+            all_actions = self.get_all_available_actions(platform)
+            
+            simplified_actions = [
+                {
+                    "_id": action._id if action._id else action.model_dump().get("_id"),
+                    "title": action.title,
+                    "tags": action.tags
+                }
+                for action in all_actions
+            ]
+            
+            # Include relevant MCP tools based on a generic matching approach
+            # This is a more dynamic approach that doesn't rely on hardcoded platform names
+            if self.mcp_tools:
+                platform_terms = platform.lower().split()
+                platform_terms.append(platform.lower())  # Add the full platform name as well
+                
+                # Find any MCP tools that might match the platform name or related terms
+                for tool in self.mcp_tools:
+                    tool_name = tool.name.lower()
+                    tool_desc = tool.description.lower() if hasattr(tool, 'description') else ""
+                    
+                    # Check if any platform term appears in the tool name or description
+                    if any(term in tool_name or term in tool_desc for term in platform_terms):
+                        simplified_actions.append({
+                            "_id": f"mcp_{tool.name}",
+                            "title": tool.name,
+                            "tags": ["MCP", "Tool"]
+                        })
+
+            logger.info(f"Found {len(simplified_actions)} available actions for {platform}")
+            return ActionsResponse(
+                success=True,
+                actions=simplified_actions,
+                platform=platform,
+                content=f"Found {len(simplified_actions)} available actions for {platform}"
+            )
+        except Exception as e:
+            logger.error(f"Error fetching available actions for {platform}: {e}", exc_info=True)
+            print(f"Error fetching available actions: {e}")
+            return ActionsResponse(
+                success=False,
+                title="Failed to get available actions",
+                message=str(e),
+                raw=str(e)
+            )
+    
+    def get_action_knowledge(self, platform: str, action_id: str) -> ActionKnowledgeResponse:
+        """
+        Get knowledge about a specific action.
+        
+        Args:
+            platform: The platform the action belongs to.
+            action_id: The ID of the action.
+            
+        Returns:
+            A response containing the action knowledge.
+        """
+        try:
+            action = self.get_single_action(action_id)
+            
+            return ActionKnowledgeResponse(
+                success=True,
+                action=action,
+                platform=platform,
+                content=f"Found knowledge for action: {action.title}"
+            )
+        except Exception as e:
+            print(f"Error getting action knowledge: {e}")
+            return ActionKnowledgeResponse(
+                success=False,
+                platform=platform,
+                title="Failed to get action knowledge",
+                message=str(e),
+                raw=str(e)
+            )
+
+    def get_mcp_tools(self) -> List[BaseTool]:
+        """
+        Get tools from connected MCP servers.
+        
+        Returns:
+            List of LangChain tools from MCP servers.
+        """
+        return self.mcp_tools    
+
+    def _paginate_results(
+        self, 
+        url: str, 
+        params: Optional[Dict[str, Any]] = None, 
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """
+        Paginate through API results.
+        
+        Args:
+            url: The API endpoint URL.
+            params: Query parameters to include in the request.
+            limit: The number of results to fetch per page.
+            
+        Returns:
+            A list of all results.
+        """
+        params = params or {}
+        skip = 0
+        all_results = []
+        total = 0
+        
+        try:
+            while True:
+                current_params = {
+                    **params,
+                    "skip": skip,
+                    "limit": limit
+                }
+
+                response = requests.get(
+                    url, 
+                    params=current_params, 
+                    headers=self._generate_headers()
+                )
+                response.raise_for_status()
+                data = response.json()
+                
+                rows = data.get("rows", [])
+                total = data.get("total", 0)
+                all_results.extend(rows)
+                
+                skip += limit
+                if len(all_results) >= total:
+                    break
+                
+            return all_results
+        except Exception as e:
+            print(f"Error in pagination: {e}")
+            raise
+    
+    def _initialize_connections(self) -> None:
+        """Fetch connections from the API."""
+        try:
+            logger.debug("Fetching connections from API")
+            
+            params: Dict[str, Any] = {}
+            
+            if self._identity_filter:
+                params["identity"] = self._identity_filter
+                
+            if self._identity_type_filter:
+                params["identityType"] = self._identity_type_filter
+            
+            try:
+                # Use the pagination method to handle pagination properly
+                connections_data = self._paginate_results(
+                    self.get_connection_url,
+                    params=params
+                )
+                
+                self.connections = [Connection(**conn) for conn in connections_data]
+                logger.info(f"Successfully fetched {len(self.connections)} connections")
+            except Exception as e:
+                logger.error(f"Failed to paginate connections: {e}", exc_info=True)
+                raise
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize connections: {e}", exc_info=True)
+            print(f"Failed to initialize connections: {e}")
+            self.connections = []
+    
+    def _initialize_connection_definitions(self) -> None:
+        """Fetch available connectors from the API."""
+        try:
+            logger.debug("Fetching available connectors from API")
+            
+            params: Dict[str, Any] = {}
+            
+            # Add authkit parameter if enabled
+            if self._use_authkit:
+                params["authkit"] = "true"
+                logger.debug("Adding authkit=true parameter to available connectors request")
+            
+            try:
+                # Use the pagination method to handle pagination properly
+                connectors_data = self._paginate_results(
+                    self.get_available_connectors_url,
+                    params=params
+                )
+                
+                self.connection_definitions = [
+                    ConnectionDefinition(**def_) 
+                    for def_ in connectors_data
+                ]
+                logger.info(f"Successfully fetched {len(self.connection_definitions)} available connectors")
+            except Exception as e:
+                logger.error(f"Failed to paginate available connectors: {e}", exc_info=True)
+                raise
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize available connectors: {e}", exc_info=True)
+            print(f"Failed to initialize available connectors: {e}")
+            self.connection_definitions = []
+    
+    def _generate_headers(self) -> Dict[str, str]:
+        """Generate headers for API requests."""
+        return {
+            "Content-Type": "application/json",
+            "x-pica-secret": self.secret,
+        }        
+    
+    @classmethod
+    async def create(cls, secret: str, options: Optional[PicaClientOptions] = None):
+        """
+        Factory method to create and initialize a PicaClient with async support.
+        
+        Args:
+            secret: The API secret for Pica.
+            options: Optional configuration parameters.
+            
+        Returns:
+            An initialized PicaClient instance.
+        """
+        client = cls(secret, options)
+        await client.async_initialize()
+        return client

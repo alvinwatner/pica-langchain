@@ -77,6 +77,7 @@ def create_pica_agent(
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
+    override_default_prompt: bool = False,
     **kwargs,
 ):
     """
@@ -90,6 +91,8 @@ def create_pica_agent(
         agent_kwargs: Additional arguments for the agent.
         system_prompt: Optional custom system prompt to prepend to the Pica system prompt.
         tools: Optional list of additional tools to include alongside the Pica tools.
+        override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
+                                WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.
         **kwargs: Additional arguments for initialize_agent.
 
     Returns:
@@ -106,22 +109,40 @@ def create_pica_agent(
 
     # Generate system prompt with Pica information
     if system_prompt:
-        try:
-            loop = asyncio.get_running_loop()
-            # We're in an event loop, use the client.system property directly
-            # and append the user system prompt
-            combined_system_prompt = client.system
-            if system_prompt:
-                from .prompts import generate_full_system_prompt
-
-                combined_system_prompt = generate_full_system_prompt(
-                    combined_system_prompt, system_prompt
-                )
-        except RuntimeError:
-            # No running event loop, safe to use asyncio.run()
-            combined_system_prompt = asyncio.run(
-                client.generate_system_prompt(system_prompt)
+        if override_default_prompt:
+            # Log a warning about overriding the default prompt
+            warnings.warn(
+                "Overriding the default Pica system prompt. This will remove all Pica-specific instructions "
+                "and may disrupt core functionality. Only use this if you know what you're doing.",
+                UserWarning
             )
+            # Use the user's system prompt directly, but still include the necessary connection info
+            try:
+                loop = asyncio.get_running_loop()
+                combined_system_prompt = f"{system_prompt}\n\nAvailable Connections:\n{client.connections_info}\n\nAvailable Platforms:\n{client.available_platforms_info}\n\nAvailable MCP Tools:\n{client.mcp_tools_info}"
+            except RuntimeError:
+                # No running event loop, safe to use asyncio.run()
+                combined_system_prompt = asyncio.run(
+                    client.generate_custom_system_prompt(system_prompt, override_default=True)
+                )
+        else:
+            # Standard behavior: append user prompt to default prompt
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an event loop, use the client.system property directly
+                # and append the user system prompt
+                combined_system_prompt = client.system
+                if system_prompt:
+                    from .prompts import generate_full_system_prompt
+
+                    combined_system_prompt = generate_full_system_prompt(
+                        combined_system_prompt, system_prompt
+                    )
+            except RuntimeError:
+                # No running event loop, safe to use asyncio.run()
+                combined_system_prompt = asyncio.run(
+                    client.generate_system_prompt(system_prompt)
+                )
     else:
         # If no custom prompt, use the default system prompt
         combined_system_prompt = client.system
