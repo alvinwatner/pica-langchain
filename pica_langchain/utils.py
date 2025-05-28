@@ -119,12 +119,13 @@ def create_pica_agent(
             # Use the user's system prompt directly, but still include the necessary connection info
             try:
                 loop = asyncio.get_running_loop()
-                combined_system_prompt = f"{system_prompt}\n\nAvailable Connections:\n{client.connections_info}\n\nAvailable Platforms:\n{client.available_platforms_info}\n\nAvailable MCP Tools:\n{client.mcp_tools_info}"
+                combined_system_prompt = f"{system_prompt}\n\<connections_info>\n{client.connections_info}\n\</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n\</mcp_tools_info>"
+                
             except RuntimeError:
                 # No running event loop, safe to use asyncio.run()
                 combined_system_prompt = asyncio.run(
                     client.generate_custom_system_prompt(system_prompt, override_default=True)
-                )
+                )   
         else:
             # Standard behavior: append user prompt to default prompt
             try:

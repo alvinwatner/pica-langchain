@@ -315,7 +315,7 @@ class PicaClient:
         
         if override_default:
             # Format the user's system prompt with the connection info
-            return f"{user_system_prompt}\n\nAvailable Connections:\n{self.connections_info}\n\nAvailable Platforms:\n{self.available_platforms_info}\n\nAvailable MCP Tools:\n{self.mcp_tools_info}"
+            return f"{user_system_prompt}\n\<connections_info>\n{self.connections_info}\n\</connections_info>\n<available_platforms_info>\n{self.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{self.mcp_tools_info}\n\</mcp_tools_info>"
 
         else:
             # Use the standard behavior
