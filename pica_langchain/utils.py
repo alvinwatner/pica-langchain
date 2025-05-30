@@ -175,6 +175,7 @@ def create_flutter_ui_agent(
     system_prompt: Optional[str] = None,
     ui_formatter_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
+    override_default_prompt: bool = False,    
     return_intermediate_steps: bool = False,
     **kwargs,
 ):
@@ -192,6 +193,8 @@ def create_flutter_ui_agent(
         ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
                            If provided, it will replace the default prompt template.
                            The template should include placeholders for {agent_output} and {tool_usage_str}.
+        override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
+                                WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.                           
         tools: Optional list of additional tools to include alongside the Pica tools.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
         **kwargs: Additional arguments for initialize_agent.
@@ -208,24 +211,46 @@ def create_flutter_ui_agent(
 
     # Append the custom system prompt if provided
     if system_prompt:
-        try:
-            loop = asyncio.get_running_loop()
-            combined_system_prompt = client.system
-            combined_system_prompt = generate_full_flutter_system_prompt(
-                combined_system_prompt, system_prompt
-            )            
+        if override_default_prompt:
+            # Log a warning about overriding the default prompt
+            warnings.warn(
+                "Overriding the default Pica system prompt. This will remove all Pica-specific instructions "
+                "and may disrupt core functionality. Only use this if you know what you're doing.",
+                UserWarning
+            )
+            # Use the user's system prompt directly, but still include the necessary connection info
+            try:
+                loop = asyncio.get_running_loop()
+                combined_system_prompt = f"{system_prompt}\n\<connections_info>\n{client.connections_info}\n\</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n\</mcp_tools_info>"
+                
+            except RuntimeError:
+                # No running event loop, safe to use asyncio.run()
+                combined_system_prompt = asyncio.run(
+                    client.generate_custom_system_prompt(system_prompt, override_default=True)
+                )   
+        else:
+            # Standard behavior: append user prompt to default prompt
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an event loop, use the client.system property directly
+                # and append the user system prompt
+                combined_system_prompt = client.system
+                if system_prompt:
+                    from .prompts import generate_full_system_prompt
 
-        except RuntimeError:
-        # No running event loop, safe to use asyncio.run()
-            combined_system_prompt = asyncio.run(
-                generate_full_flutter_system_prompt(system_prompt)
-            )     
+                    combined_system_prompt = generate_full_system_prompt(
+                        combined_system_prompt, system_prompt
+                    )
+            except RuntimeError:
+                # No running event loop, safe to use asyncio.run()
+                combined_system_prompt = asyncio.run(
+                    client.generate_system_prompt(system_prompt)
+                )        
 
     else:
         # If no custom prompt, use the default system prompt
         combined_system_prompt = client.system                   
 
-    print(f'combined_system_prompt: {combined_system_prompt}')
     
     default_agent_kwargs = {
         "system_message": combined_system_prompt,
