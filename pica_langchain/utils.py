@@ -308,12 +308,11 @@ class FlutterUIAgent:
         # Run the original agent
         result = self.agent(inputs, **kwargs)
         
-        # Extract the output and intermediate steps
+        # Extract the output 
         output = result.get("output", "")
-        intermediate_steps = result.get("intermediate_steps", [])
         
         # Format the output to Flutter UI JSON
-        ui_json = self.formatter.format_to_ui(output, intermediate_steps)
+        ui_json = self.formatter.format_to_ui(output)
         
         # Return both the original result and the UI JSON
         result["ui_json"] = ui_json
@@ -330,15 +329,18 @@ class FlutterUIAgent:
         Returns:
             A dictionary containing the Flutter UI JSON.
         """
-        # Run the original agent asynchronously
+        # Run the original agent
         result = await self.agent.acall(inputs, **kwargs)
+        logger.info(f"UI Agent output: {result}")
         
-        # Extract the output and intermediate steps
+        # Extract the output 
         output = result.get("output", "")
-        intermediate_steps = result.get("intermediate_steps", [])
+            
+        # Extract user input using the helper method
+        user_input = self.formatter._extract_user_input(inputs)
         
-        # Format the output to Flutter UI JSON
-        ui_json = self.formatter.format_to_ui(output, intermediate_steps)
+        # Format the output to Flutter UI JSON with both user input and agent output
+        ui_json = self.formatter.format_to_ui(user_input, output)
         
         # Return both the original result and the UI JSON
         result["ui_json"] = ui_json

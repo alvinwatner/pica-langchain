@@ -34,16 +34,16 @@ class FlutterUIFormatter:
         
     def format_to_ui(
         self,
+        user_input: str,
         agent_output: str,
-        intermediate_steps: Optional[List[Union[AgentAction, AgentFinish]]] = None,
         run_manager: Optional[CallbackManagerForChainRun] = None
     ) -> Dict[str, Any]:
         """
         Format the agent output to Flutter UI JSON.
         
         Args:
+            user_input: The original user question/request.
             agent_output: The text output from the agent.
-            intermediate_steps: Optional list of intermediate steps from the agent.
             run_manager: Optional callback manager for the chain run.
             
         Returns:
@@ -51,23 +51,18 @@ class FlutterUIFormatter:
         """
         logger.info("Converting agent output to Flutter UI JSON")
         
-        # Extract tool usage information from intermediate steps if available
-        tool_usage = []
-        if intermediate_steps:
-            for step in intermediate_steps:
-                if isinstance(step, tuple) and len(step) >= 2:
-                    action, observation = step
-                    if hasattr(action, 'tool') and hasattr(action, 'tool_input'):
-                        tool_usage.append({
-                            "tool": action.tool,
-                            "input": action.tool_input,
-                            "output": str(observation)
-                        })
-        
-        # Create a prompt for the fine-tuned model
-        prompt = self._create_ui_generation_prompt(agent_output, tool_usage)
+        # Create the messages format
+        messages = {
+            "messages": [
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": agent_output}
+            ]
+        }        
 
-        print("flutter formatter prompt = ", prompt)
+        # Create a prompt for the fine-tuned model
+        prompt = self._create_ui_generation_prompt(messages)
+
+        logger.info("flutter formatter prompt = ", prompt)
         
         # Generate Flutter UI JSON using the fine-tuned model
         try:
@@ -79,38 +74,50 @@ class FlutterUIFormatter:
             logger.error(f"Error generating Flutter UI JSON: {e}", exc_info=True)
             # Fallback to a simple UI representation
             return self._create_fallback_ui(agent_output, str(e))
-    
-    def _create_ui_generation_prompt(self, agent_output: str, tool_usage: List[Dict[str, Any]]) -> str:
+
+    def _create_ui_generation_prompt(self, messages: Dict[str, Any]) -> str:
         """
         Create a prompt for the fine-tuned model to generate Flutter UI JSON.
         
         Args:
-            agent_output: The text output from the agent.
-            tool_usage: Information about tool usage from intermediate steps.
+            messages: The conversation messages in the specified format.
             
         Returns:
             A prompt string for the fine-tuned model.
         """
-        tool_usage_str = json.dumps(tool_usage, indent=2) if tool_usage else "No tools were used"
+        # Convert messages to JSON string for the prompt
+        messages_str = json.dumps(messages, indent=2)
         
-        # Use custom prompt if provided, otherwise use default
+        # Use custom prompt if provided, otherwise use the improved default
         if self.ui_formatter_prompt:
-            return f"{self.ui_formatter_prompt} \n\n AGENT OUTPUT: {agent_output} \n\n TOOL USAGE: {tool_usage_str}"
+            return f"{self.ui_formatter_prompt}\n\nCONVERSATION:\n{messages_str}"
         else:
+            # Default prompt that emphasizes the context-aware approach
             return f"""
-            Convert the following agent response to a Flutter server-driven UI JSON:
-            
-            AGENT OUTPUT:
-            {agent_output}
-            
-            TOOL USAGE:
-            {tool_usage_str}
-            
-            Generate a Flutter server-driven UI JSON that represents this information in a user-friendly way.
-            The JSON should be valid and directly usable by a Flutter application.
+You are an AI Assistant specialized in generating Stac JSON for Flutter's Server-Driven UI framework. Your task is to transform conversational exchanges between a user and an AI assistant into properly formatted Stac JSON that creates elegant, intuitive UIs.
 
-            
-            """
+CONVERSATION:
+{messages_str}
+
+CORE MISSION:
+Create a UI that visually presents the assistant's response in a way that directly serves the user's original request. Always consider:
+1. What did the user ask for?
+2. What type of data did the assistant provide?
+3. How can I best visualize this to fulfill the user's intent?
+
+MANDATORY STRUCTURE:
+- Root element MUST be "type": "singleChildScrollView"
+- Include "padding": {{"left": 16, "right": 16, "top": 16, "bottom": 16}}
+- Direct child MUST be "type": "column" with "crossAxisAlignment": "stretch"
+
+DESIGN SYSTEM:
+- Containers: color: "white12" or "grey12", borderRadius: 8, border: {{"color": "#848484", "width": 1}}
+- Text Headers: "fontWeight": "w600", "color": "#FFFFFF"
+- Body Text: {{"color": "#FFFFFF", "fontSize": 12-14}}
+- Spacing: {{"type": "sizedBox", "height": 8-20}} between sections
+
+Return ONLY valid JSON - no explanations, no markdown, no code formatting.
+"""    
     
     def _extract_json(self, response: str) -> Dict[str, Any]:
         """
@@ -144,6 +151,31 @@ class FlutterUIFormatter:
                 return self._create_fallback_ui(response, "Could not extract valid JSON from model response")
             except Exception as e:
                 return self._create_fallback_ui(response, f"Error extracting JSON: {e}")
+
+    def _extract_user_input(self, inputs: Any) -> str:
+        """
+        Extract the user's original input from the inputs parameter.
+        
+        Args:
+            inputs: The inputs passed to the agent.
+            
+        Returns:
+            The user's original input as a string.
+        """
+        if isinstance(inputs, dict):
+            # Try common keys for user input
+            for key in ['input', 'query', 'question', 'user_input', 'text']:
+                if key in inputs:
+                    return str(inputs[key])
+            # If no standard key found, try to find the first string value
+            for value in inputs.values():
+                if isinstance(value, str):
+                    return value
+        elif isinstance(inputs, str):
+            return inputs
+        
+        # Fallback
+        return str(inputs)                
     
     def _create_fallback_ui(self, content: str, error: str) -> Dict[str, Any]:
         """
