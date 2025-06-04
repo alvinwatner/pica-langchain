@@ -9,7 +9,6 @@ setup(
         "langchain_openai==0.3.8",
         "langchain-community>=0.2.0",
         "duckduckgo-search>=4.1.0",
-        "google-serper>=0.1.0",
         "pydantic==2.10.6",
         "requests==2.32.3",
         "requests-toolbelt>=1.0.0",
