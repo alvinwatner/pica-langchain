@@ -1,11 +1,11 @@
 from typing import Dict, Any, Optional, ClassVar
 from langchain.tools import BaseTool
 from langchain_community.tools import DuckDuckGoSearchResults
-from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
 )
+from .serper_utils import create_serper_wrapper
 import os
 import json
 from pydantic import BaseModel, Field
@@ -311,12 +311,8 @@ class WebSearchTool(BaseTool):
         # Initialize with default values for the fields
         kwargs["ddg_search"] = DuckDuckGoSearchResults(output_format="json")
         
-        # Set up Google Serper if API key is provided
-        if serper_api_key:
-            os.environ["SERPER_API_KEY"] = serper_api_key
-            kwargs["serper"] = GoogleSerperAPIWrapper()
-        else:
-            kwargs["serper"] = None
+        # Set up Google Serper if API key is provided using our utility function
+        kwargs["serper"] = create_serper_wrapper(serper_api_key)
         
         super().__init__(**kwargs)
     
