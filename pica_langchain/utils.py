@@ -68,8 +68,12 @@ def get_tools_from_client(client: PicaClient, disable_web_search: bool = False) 
     # Add web search tool if not disabled
     search_tool = WebSearchTool(serper_api_key=client.serper_api_key) if not disable_web_search else None
 
-    # Combine all tools
-    return pica_tools + mcp_tools + [search_tool]
+    all_tools = pica_tools + mcp_tools
+
+    if search_tool:
+        all_tools.append(search_tool)
+
+    return all_tools
 
 
 def create_pica_agent(
@@ -80,7 +84,7 @@ def create_pica_agent(
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
-    disable_web_search: bool = False,
+    disable_web_search: Optional[bool] = False,
     override_default_prompt: bool = False,
     **kwargs,
 ):
