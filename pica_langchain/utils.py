@@ -9,7 +9,6 @@ from langchain.llms.base import BaseLLM
 from langchain.chat_models.base import BaseChatModel
 
 from .flutter_formatter import FlutterUIFormatter
-
 from .client import PicaClient
 from .prompts import generate_full_flutter_system_prompt
 from .tools import (
@@ -17,6 +16,7 @@ from .tools import (
     GetActionKnowledgeTool,
     ExecuteTool,
     PromptToConnectPlatformTool,
+    WebSearchTool,
 )
 
 from .logger import get_logger
@@ -49,9 +49,9 @@ def create_pica_tools(client: PicaClient) -> List[BaseTool]:
     return tools
 
 
-def get_tools_from_client(client: PicaClient) -> List[BaseTool]:
+def get_tools_from_client(client: PicaClient, disable_web_search: bool = False) -> List[BaseTool]:
     """
-    Get all tools from a Pica client, including both Pica tools and MCP tools.
+    Get all tools from a Pica client, including both Pica tools, MCP tools, and web search tools.
 
     Args:
         client: The Pica client to use.
@@ -64,9 +64,16 @@ def get_tools_from_client(client: PicaClient) -> List[BaseTool]:
 
     # Get MCP tools if available
     mcp_tools = client.get_mcp_tools() if hasattr(client, "get_mcp_tools") else []
+    
+    # Add web search tool if not disabled
+    search_tool = WebSearchTool(serper_api_key=client.serper_api_key) if not disable_web_search else None
 
-    # Combine all tools
-    return pica_tools + mcp_tools
+    all_tools = pica_tools + mcp_tools
+
+    if search_tool:
+        all_tools.append(search_tool)
+
+    return all_tools
 
 
 def create_pica_agent(
@@ -77,6 +84,7 @@ def create_pica_agent(
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
+    disable_web_search: Optional[bool] = False,
     override_default_prompt: bool = False,
     **kwargs,
 ):
@@ -91,6 +99,7 @@ def create_pica_agent(
         agent_kwargs: Additional arguments for the agent.
         system_prompt: Optional custom system prompt to prepend to the Pica system prompt.
         tools: Optional list of additional tools to include alongside the Pica tools.
+        disable_web_search: If True, disables the web search tool.
         override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
                                 WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.
         **kwargs: Additional arguments for initialize_agent.
@@ -101,7 +110,7 @@ def create_pica_agent(
     import asyncio
 
     # Create default Pica tools
-    all_tools = get_tools_from_client(client)
+    all_tools = get_tools_from_client(client, disable_web_search)
 
     # Combine default tools with any user-provided tools
     if tools:
