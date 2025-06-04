@@ -315,6 +315,8 @@ class WebSearchTool(BaseTool):
         if serper_api_key:
             os.environ["SERPER_API_KEY"] = serper_api_key
             kwargs["serper"] = GoogleSerperAPIWrapper()
+        else:
+            kwargs["serper"] = None
         
         super().__init__(**kwargs)
     
