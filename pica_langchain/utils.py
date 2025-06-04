@@ -185,6 +185,7 @@ def create_flutter_ui_agent(
     ui_formatter_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
     override_default_prompt: bool = False,    
+    disable_web_search: bool = False,
     return_intermediate_steps: bool = False,
     **kwargs,
 ):
@@ -205,6 +206,7 @@ def create_flutter_ui_agent(
         override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
                                 WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.                           
         tools: Optional list of additional tools to include alongside the Pica tools.
+        disable_web_search: If True, disables the web search tool.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
         **kwargs: Additional arguments for initialize_agent.
 
@@ -212,7 +214,7 @@ def create_flutter_ui_agent(
         A Flutter UI agent.
     """
     # Create default Pica tools
-    all_tools = get_tools_from_client(client)
+    all_tools = get_tools_from_client(client, disable_web_search)
 
     # Combine default tools with any user-provided tools
     if tools:
