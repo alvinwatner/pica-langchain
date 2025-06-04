@@ -1,9 +1,12 @@
-from typing import Dict, Any, Optional, ClassVar, List
+from typing import Dict, Any, Optional, ClassVar
 from langchain.tools import BaseTool
+from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.utilities import GoogleSerperAPIWrapper
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
 )
+import os
 import json
 from pydantic import BaseModel, Field
 
@@ -288,3 +291,98 @@ class PromptToConnectPlatformSchema(BaseModel):
     platform_name: str = Field(description="The platform name that the user needs to connect to. Always use the exact platform identifier (text before parentheses), e.g., 'gmail' for 'gmail (Gmail)'.")
 
 PromptToConnectPlatformTool.args_schema = PromptToConnectPlatformSchema
+
+
+class WebSearchTool(BaseTool):
+    """Tool that provides web search with fallback mechanisms."""
+    
+    name: ClassVar[str] = "web_search"
+    description: ClassVar[str] = "Search the web for information about events, people, places, or concepts. Use this when you need to find information that might not be in your training data."
+    
+    ddg_search: Any = Field(default=None, exclude=True)
+    serper: Any = Field(default=None, exclude=True)
+    
+    def __init__(self, serper_api_key: Optional[str] = None, **kwargs):
+        """Initialize the fallback web search tool.
+        
+        Args:
+            serper_api_key: Optional Google Serper API key. If provided, Google Serper will be used as a fallback.
+        """
+        # Initialize with default values for the fields
+        kwargs["ddg_search"] = DuckDuckGoSearchResults(output_format="json")
+        
+        # Set up Google Serper if API key is provided
+        if serper_api_key:
+            os.environ["SERPER_API_KEY"] = serper_api_key
+            kwargs["serper"] = GoogleSerperAPIWrapper()
+        
+        super().__init__(**kwargs)
+    
+    def _run(
+        self, 
+        query: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Run the tool to search the web.
+        
+        Args:
+            query: The search query.
+            run_manager: Callback manager for the tool run.
+            
+        Returns:
+            JSON string with the search results.
+        """
+        logger.info(f"Searching the web for: {query}")
+        
+        # Try Google Serper first if available (preferred search engine)
+        if self.serper:
+            try:
+                logger.info("Attempting Google Serper search")
+                results = self.serper.run(query)
+                logger.info("Google Serper search successful")
+                return results
+            except Exception as e:
+                logger.warning(f"Google Serper search failed: {str(e)}")
+                serper_error = str(e)
+                
+                # Fall back to DuckDuckGo
+                try:
+                    logger.info("Falling back to DuckDuckGo search")
+                    results = self.ddg_search.run(query)
+                    logger.info("DuckDuckGo search successful")
+                    return results
+                except Exception as ddg_e:
+                    logger.warning(f"DuckDuckGo search failed: {str(ddg_e)}")
+                    
+                    # Both searches failed
+                    error_msg = f"Web search failed. Google Serper error: {serper_error}. DuckDuckGo error: {str(ddg_e)}"
+                    return json.dumps({"error": error_msg})
+        
+        # If no Google Serper available, try DuckDuckGo only
+        try:
+            logger.info("Attempting DuckDuckGo search")
+            results = self.ddg_search.run(query)
+            logger.info("DuckDuckGo search successful")
+            return results
+        except Exception as e:
+            logger.warning(f"DuckDuckGo search failed: {str(e)}")
+            error_msg = f"Web search failed. DuckDuckGo error: {str(e)}"
+            
+            return json.dumps({"error": error_msg})
+    
+    async def _arun(
+        self, 
+        query: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Async version of the run method.
+        """
+        return self._run(query=query)
+
+
+class WebSearchSchema(BaseModel):
+    query: str = Field(description="The search query to look up information on the web")
+
+WebSearchTool.args_schema = WebSearchSchema

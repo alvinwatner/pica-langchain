@@ -83,7 +83,9 @@ class PicaClient:
         if options.mcp_options:
             logger.debug("Initializing MCP client with provided options")
             mcp_options = MCPClientOptions(servers=options.mcp_options)
-            self.mcp_client = PicaMCPClient(options=mcp_options)        
+            self.mcp_client = PicaMCPClient(options=mcp_options)   
+
+        self.serper_api_key = options.serper_api_key     
 
     def initialize(self) -> None:
         """
