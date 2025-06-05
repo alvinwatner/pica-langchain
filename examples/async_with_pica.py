@@ -55,6 +55,8 @@ async def main():
         #         callbacks=[StreamingStdOutCallbackHandler()]
         #     )
 
+        system_prompt = await pica_client.generate_system_prompt('Always start your response with `Pica works like ✨`')
+
         # Create a Pica agent with the LLM
         # This will now handle the system_prompt correctly in an async context
         agent = create_pica_agent(
@@ -62,7 +64,8 @@ async def main():
             llm=llm,
             agent_type=AgentType.OPENAI_FUNCTIONS,
             return_intermediate_steps=True,
-            system_prompt="Always start your response with `Pica works like ✨\n`" # Optional: Custom system prompt to append
+            override_default_prompt=True,
+            system_prompt=system_prompt
         )
 
         print("\n=== TESTING ASYNC STREAMING WITH SYSTEM PROMPT ===\n")

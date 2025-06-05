@@ -210,7 +210,7 @@ pytest
 
 ### Logging
 
-The Pica LangChain SDK uses the `logging` module to log messages. The log level can be set using the `PICA_LOG_LEVEL` environment variable.
+The Pica LangChain SDK uses the `logging` module **to** log messages. The log level can be set using the `PICA_LOG_LEVEL` environment variable.
 
 The following log levels are available:
 

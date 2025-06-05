@@ -34,8 +34,10 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
     """
     # Initialize the Pica client
     options = PicaClientOptions(
-        connectors=["*"],  # Initialize all available connections
-        # Add any other options you need
+        authkit=True,
+        identity_type="user",
+        identity="67209c6410868fc15401f5b0",
+        connectors=["*"],
     )
     pica_client = PicaClient(
         secret=os.getenv("PICA_SECRET"),
@@ -48,7 +50,7 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
     # Create language models
     llm = ChatOpenAI(
         temperature=0,
-        model="gpt-4",
+        model="gpt-4.1",
         streaming=True,
     )
 
@@ -61,9 +63,11 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
     )
 
     # Optional custom system prompt
-    system_prompt = """
+    ui_system_prompt = """
     You are an AI Assistant specialized in generating Stac JSON for Flutter's Server-Driven UI framework. Your task is to transform API responses into properly formatted Stac JSON that creates elegant, intuitive UIs adhering to strict design guidelines.
     """
+
+    system_prompt = await pica_client.generate_system_prompt()
 
     # Create both agents
     chat_agent = create_pica_agent(
@@ -77,7 +81,9 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
         llm=flutter_llm,
         flutter_llm=flutter_llm,
         return_intermediate_steps=True,
-        ui_formatter_prompt=system_prompt
+        override_default_prompt=True,
+        system_prompt=system_prompt,
+        ui_formatter_prompt=ui_system_prompt,
     )
 
     # Run both agents in parallel
@@ -93,7 +99,7 @@ async def run_agents_in_parallel(user_input: str) -> Dict[str, Any]:
 
 async def main():
     """Main function to demonstrate parallel agent execution."""
-    user_input = "What actions are available in Gmail?"
+    user_input = "Hey can you check my google calendar events for 28 May 2025?"
 
     print(f"User input: {user_input}")
     print("Running agents in parallel...")

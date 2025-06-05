@@ -13,10 +13,14 @@ from pica_langchain.models import PicaClientOptions
 
 # Configure MCP servers
 mcp_options = {
-    "youtube": {
-        "url": "https://mcp.zapier.com/api/mcp/s/MzgwOTJhMzItMTIxMC00N2I2LWI0OTctNzM2Zjc3NWI2ZWRkOjllYzVkZDhiLWI3MjQtNDJjZi04NmZkLTU3YTlmZmYwMmY3ZA==/sse",
+    # "youtube": {
+    #     "url": "https://mcp.zapier.com/api/mcp/s/MzgwOTJhMzItMTIxMC00N2I2LWI0OTctNzM2Zjc3NWI2ZWRkOjllYzVkZDhiLWI3MjQtNDJjZi04NmZkLTU3YTlmZmYwMmY3ZA==/sse",
+    #     "transport": "sse",
+    # }
+    "notion": {
+        "url": "https://notion-mcp-server.klavis.ai/sse?instance_id=c3d99a79-351c-445b-a0de-1c7018866dfc",
         "transport": "sse",
-    }
+    }    
     # "KlavisReportGen": {
     #     "url": "https://klavis-reportgen-mcp-server.klavis.ai/sse?instance_id=04080015-04d4-48dd-b8d0-6c6a6ca17b80",
     #     "transport": "sse",
@@ -80,7 +84,7 @@ async def main():
 
     result = await agent.ainvoke(
         {
-            "input": ("Can you help me to retrieve batch of contact in hubspot?")
+            "input": ("Can you query the databases in my notion?")
             # "input": ("Can you check what tasks I have?")
             # "input": (
             #     "First, calculate 25 * 17, then check weather in New York, finally list all connectors Pica supported"
