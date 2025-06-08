@@ -26,6 +26,7 @@ warnings.filterwarnings("ignore", category=LangChainDeprecationWarning)
 
 logger = get_logger()
 
+
 def create_pica_tools(client: PicaClient) -> List[BaseTool]:
     """
     Create a list of Pica tools for use with LangChain.
@@ -49,7 +50,9 @@ def create_pica_tools(client: PicaClient) -> List[BaseTool]:
     return tools
 
 
-def get_tools_from_client(client: PicaClient, disable_web_search: bool = False) -> List[BaseTool]:
+def get_tools_from_client(
+    client: PicaClient, disable_web_search: bool = False
+) -> List[BaseTool]:
     """
     Get all tools from a Pica client, including both Pica tools, MCP tools, and web search tools.
 
@@ -64,9 +67,16 @@ def get_tools_from_client(client: PicaClient, disable_web_search: bool = False) 
 
     # Get MCP tools if available
     mcp_tools = client.get_mcp_tools() if hasattr(client, "get_mcp_tools") else []
-    
+
     # Add web search tool if not disabled
-    search_tool = WebSearchTool(serper_api_key=client.serper_api_key) if not disable_web_search else None
+    search_tool = (
+        WebSearchTool(
+            serper_api_keys=client.serper_api_keys,
+            firecrawl_api_keys=client.firecrawl_api_keys,
+        )
+        if not disable_web_search
+        else None
+    )
 
     all_tools = pica_tools + mcp_tools
 
@@ -123,18 +133,20 @@ def create_pica_agent(
             warnings.warn(
                 "Overriding the default Pica system prompt. This will remove all Pica-specific instructions "
                 "and may disrupt core functionality. Only use this if you know what you're doing.",
-                UserWarning
+                UserWarning,
             )
             # Use the user's system prompt directly, but still include the necessary connection info
             try:
                 loop = asyncio.get_running_loop()
                 combined_system_prompt = f"{system_prompt}\n\<connections_info>\n{client.connections_info}\n\</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n\</mcp_tools_info>"
-                
+
             except RuntimeError:
                 # No running event loop, safe to use asyncio.run()
                 combined_system_prompt = asyncio.run(
-                    client.generate_custom_system_prompt(system_prompt, override_default=True)
-                )   
+                    client.generate_custom_system_prompt(
+                        system_prompt, override_default=True
+                    )
+                )
         else:
             # Standard behavior: append user prompt to default prompt
             try:
@@ -184,7 +196,7 @@ def create_flutter_ui_agent(
     system_prompt: Optional[str] = None,
     ui_formatter_prompt: Optional[str] = None,
     tools: Optional[List[BaseTool]] = None,
-    override_default_prompt: bool = False,    
+    override_default_prompt: bool = False,
     disable_web_search: bool = False,
     return_intermediate_steps: bool = False,
     **kwargs,
@@ -204,7 +216,7 @@ def create_flutter_ui_agent(
                            If provided, it will replace the default prompt template.
                            The template should include placeholders for {agent_output} and {tool_usage_str}.
         override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
-                                WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.                           
+                                WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.
         tools: Optional list of additional tools to include alongside the Pica tools.
         disable_web_search: If True, disables the web search tool.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
@@ -227,18 +239,20 @@ def create_flutter_ui_agent(
             warnings.warn(
                 "Overriding the default Pica system prompt. This will remove all Pica-specific instructions "
                 "and may disrupt core functionality. Only use this if you know what you're doing.",
-                UserWarning
+                UserWarning,
             )
             # Use the user's system prompt directly, but still include the necessary connection info
             try:
                 loop = asyncio.get_running_loop()
                 combined_system_prompt = f"{system_prompt}\n\<connections_info>\n{client.connections_info}\n\</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n\</mcp_tools_info>"
-                
+
             except RuntimeError:
                 # No running event loop, safe to use asyncio.run()
                 combined_system_prompt = asyncio.run(
-                    client.generate_custom_system_prompt(system_prompt, override_default=True)
-                )   
+                    client.generate_custom_system_prompt(
+                        system_prompt, override_default=True
+                    )
+                )
         else:
             # Standard behavior: append user prompt to default prompt
             try:
@@ -256,16 +270,15 @@ def create_flutter_ui_agent(
                 # No running event loop, safe to use asyncio.run()
                 combined_system_prompt = asyncio.run(
                     client.generate_system_prompt(system_prompt)
-                )        
+                )
 
     else:
         # If no custom prompt, use the default system prompt
-        combined_system_prompt = client.system                   
+        combined_system_prompt = client.system
 
-    
     default_agent_kwargs = {
         "system_message": combined_system_prompt,
-        "return_intermediate_steps": return_intermediate_steps
+        "return_intermediate_steps": return_intermediate_steps,
     }
 
     # Merge default agent kwargs with user-provided ones
@@ -290,11 +303,16 @@ class FlutterUIAgent:
     """
     Agent wrapper that generates Flutter UI JSON from agent responses.
     """
-    
-    def __init__(self, agent, flutter_llm: BaseChatModel, ui_formatter_prompt: Optional[str] = None):
+
+    def __init__(
+        self,
+        agent,
+        flutter_llm: BaseChatModel,
+        ui_formatter_prompt: Optional[str] = None,
+    ):
         """
         Initialize the Flutter UI Agent.
-        
+
         Args:
             agent: The LangChain agent to wrap.
             flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
@@ -304,80 +322,80 @@ class FlutterUIAgent:
         """
         self.agent = agent
         self.formatter = FlutterUIFormatter(flutter_llm, ui_formatter_prompt)
-        
+
     def __call__(self, inputs, **kwargs):
         """
         Run the agent and format the output as Flutter UI JSON.
-        
+
         Args:
             inputs: The inputs to pass to the agent.
             **kwargs: Additional arguments to pass to the agent.
-            
+
         Returns:
             A dictionary containing the Flutter UI JSON.
         """
         # Run the original agent
         result = self.agent(inputs, **kwargs)
-        
-        # Extract the output 
+
+        # Extract the output
         output = result.get("output", "")
-        
+
         # Format the output to Flutter UI JSON
         ui_json = self.formatter.format_to_ui(output)
-        
+
         # Return both the original result and the UI JSON
         result["ui_json"] = ui_json
         return result
-    
+
     async def acall(self, inputs, **kwargs):
         """
         Asynchronously run the agent and format the output as Flutter UI JSON.
-        
+
         Args:
             inputs: The inputs to pass to the agent.
             **kwargs: Additional arguments to pass to the agent.
-            
+
         Returns:
             A dictionary containing the Flutter UI JSON.
         """
         # Run the original agent
         result = await self.agent.acall(inputs, **kwargs)
         logger.info(f"UI Agent output: {result}")
-        
-        # Extract the output 
+
+        # Extract the output
         output = result.get("output", "")
-            
+
         # Extract user input using the helper method
         user_input = self.formatter._extract_user_input(inputs)
-        
+
         # Format the output to Flutter UI JSON with both user input and agent output
         ui_json = self.formatter.format_to_ui(user_input, output)
-        
+
         # Return both the original result and the UI JSON
         result["ui_json"] = ui_json
         return result
-    
+
     def run(self, input_text: str, **kwargs):
         """
         Run the agent with a simple string input.
-        
+
         Args:
             input_text: The input text from the user.
             **kwargs: Additional arguments to pass to the agent.
-            
+
         Returns:
             A dictionary containing the Flutter UI JSON.
         """
         return self({"input": input_text}, **kwargs)
-    
+
     async def arun(self, input_text: str, **kwargs):
         """
         Asynchronously run the agent with a simple string input.
-        
+
         Args:
             input_text: The input text from the user.
             **kwargs: Additional arguments to pass to the agent.
-            
+
         Returns:
             A dictionary containing the Flutter UI JSON.
         """

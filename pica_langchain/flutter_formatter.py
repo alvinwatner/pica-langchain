@@ -65,8 +65,6 @@ class FlutterUIFormatter:
         # Create a prompt for the fine-tuned model
         prompt = self._create_ui_generation_prompt(messages)
 
-        logger.info("flutter formatter prompt = ", prompt)
-
         # Generate Flutter UI JSON using the fine-tuned model
         try:
             response = self.flutter_llm.predict(prompt)

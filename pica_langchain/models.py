@@ -273,10 +273,14 @@ class PicaClientOptions(BaseModel):
         default=None,
         description="MCP server configuration options. Dictionary with server names as keys and configuration as values."
     ) 
-    serper_api_key: Optional[str] = Field(
+    serper_api_keys: Optional[List[str]] = Field(
         default=None,
-        description="Google Serper API key for web search"
+        description="Google Serper API keys for web search"
     )       
+    firecrawl_api_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Firecrawl API keys for web search"
+    )
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True

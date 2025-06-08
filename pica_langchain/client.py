@@ -85,7 +85,8 @@ class PicaClient:
             mcp_options = MCPClientOptions(servers=options.mcp_options)
             self.mcp_client = PicaMCPClient(options=mcp_options)   
 
-        self.serper_api_key = options.serper_api_key     
+        self.serper_api_keys = options.serper_api_keys    
+        self.firecrawl_api_keys = options.firecrawl_api_keys 
 
     def initialize(self) -> None:
         """

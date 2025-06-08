@@ -1,11 +1,12 @@
-from typing import Dict, Any, Optional, ClassVar
+from typing import Dict, Any, Optional, ClassVar, List
 from langchain.tools import BaseTool
 from langchain_community.tools import DuckDuckGoSearchResults
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
 )
-from .serper_utils import create_serper_wrapper
+from .serper_utils import SerperWrapper
+from .firecrawl_utils import FirecrawlWrapper
 import os
 import json
 from pydantic import BaseModel, Field
@@ -294,25 +295,46 @@ PromptToConnectPlatformTool.args_schema = PromptToConnectPlatformSchema
 
 
 class WebSearchTool(BaseTool):
-    """Tool that provides web search with fallback mechanisms."""
+    """Tool that provides web search with multiple fallback mechanisms."""
     
     name: ClassVar[str] = "web_search"
     description: ClassVar[str] = "Search the web for information about events, people, places, or concepts. Use this when you need to find information that might not be in your training data."
     
     ddg_search: Any = Field(default=None, exclude=True)
     serper: Any = Field(default=None, exclude=True)
+    firecrawl: Any = Field(default=None, exclude=True)
     
-    def __init__(self, serper_api_key: Optional[str] = None, **kwargs):
+    def __init__(self, serper_api_keys: Optional[List[str]] = None, firecrawl_api_keys: Optional[List[str]] = None, **kwargs):
         """Initialize the fallback web search tool.
         
         Args:
-            serper_api_key: Optional Google Serper API key. If provided, Google Serper will be used as a fallback.
+            serper_api_keys: Optional list of Google Serper API keys. Will be tried in order.
+            firecrawl_api_keys: Optional list of Firecrawl API keys. Will be tried in order if Google Serper fails.
         """
         # Initialize with default values for the fields
         kwargs["ddg_search"] = DuckDuckGoSearchResults(output_format="json")
         
-        # Set up Google Serper if API key is provided using our utility function
-        kwargs["serper"] = create_serper_wrapper(serper_api_key)
+        # Set up Google Serper if API keys are provided
+        if serper_api_keys:
+            if isinstance(serper_api_keys, str):
+                serper_api_keys = [serper_api_keys]
+            try:
+                kwargs["serper"] = SerperWrapper(serper_api_keys) if serper_api_keys else None
+            except Exception as e:
+                logger.warning(f"Failed to initialize SerperWrapper: {str(e)}")
+                kwargs["serper"] = None
+        else:
+            kwargs["serper"] = None
+        
+        # Set up Firecrawl if API keys are provided
+        if firecrawl_api_keys:
+            try:
+                kwargs["firecrawl"] = FirecrawlWrapper(firecrawl_api_keys) if firecrawl_api_keys else None
+            except Exception as e:
+                logger.warning(f"Failed to initialize FirecrawlWrapper: {str(e)}")
+                kwargs["firecrawl"] = None
+        else:
+            kwargs["firecrawl"] = None
         
         super().__init__(**kwargs)
     
@@ -322,7 +344,12 @@ class WebSearchTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
         """
-        Run the tool to search the web.
+        Run the tool to search the web with multiple fallbacks.
+        
+        Fallback order:
+        1. Google Serper (with multiple API keys)
+        2. Firecrawl (with multiple API keys)
+        3. DuckDuckGo
         
         Args:
             query: The search query.
@@ -332,6 +359,7 @@ class WebSearchTool(BaseTool):
             JSON string with the search results.
         """
         logger.info(f"Searching the web for: {query}")
+        errors = {}
         
         # Try Google Serper first if available (preferred search engine)
         if self.serper:
@@ -341,31 +369,33 @@ class WebSearchTool(BaseTool):
                 logger.info("Google Serper search successful")
                 return results
             except Exception as e:
-                logger.warning(f"Google Serper search failed: {str(e)}")
-                serper_error = str(e)
-                
-                # Fall back to DuckDuckGo
-                try:
-                    logger.info("Falling back to DuckDuckGo search")
-                    results = self.ddg_search.run(query)
-                    logger.info("DuckDuckGo search successful")
-                    return results
-                except Exception as ddg_e:
-                    logger.warning(f"DuckDuckGo search failed: {str(ddg_e)}")
-                    
-                    # Both searches failed
-                    error_msg = f"Web search failed. Google Serper error: {serper_error}. DuckDuckGo error: {str(ddg_e)}"
-                    return json.dumps({"error": error_msg})
+                logger.warning(f"All Google Serper API keys failed: {str(e)}")
+                errors["serper"] = str(e)
         
-        # If no Google Serper available, try DuckDuckGo only
+        # If Google Serper failed, try Firecrawl
+        if self.firecrawl:
+            try:
+                logger.info("Attempting Firecrawl search")
+                results = self.firecrawl.run(query)
+                logger.info("Firecrawl search successful")
+                return results
+            except Exception as e:
+                logger.warning(f"All Firecrawl API keys failed: {str(e)}")
+                errors["firecrawl"] = str(e)
+        
+        # If both Google Serper and Firecrawl failed, try DuckDuckGo
         try:
-            logger.info("Attempting DuckDuckGo search")
+            logger.info("Falling back to DuckDuckGo search")
             results = self.ddg_search.run(query)
             logger.info("DuckDuckGo search successful")
             return results
         except Exception as e:
             logger.warning(f"DuckDuckGo search failed: {str(e)}")
-            error_msg = f"Web search failed. DuckDuckGo error: {str(e)}"
+            errors["duckduckgo"] = str(e)
+            
+            # All search engines failed
+            error_details = ", ".join([f"{k}: {v}" for k, v in errors.items()])
+            error_msg = f"Web search failed. Errors: {error_details}"
             
             return json.dumps({"error": error_msg})
     
