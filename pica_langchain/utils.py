@@ -17,6 +17,7 @@ from .tools import (
     ExecuteTool,
     PromptToConnectPlatformTool,
     WebSearchTool,
+    GoogleCustomSearchTool,
 )
 
 from .logger import get_logger
@@ -51,7 +52,8 @@ def create_pica_tools(client: PicaClient) -> List[BaseTool]:
 
 
 def get_tools_from_client(
-    client: PicaClient, disable_web_search: bool = False
+    client: PicaClient,
+    disable_web_search: bool = False,
 ) -> List[BaseTool]:
     """
     Get all tools from a Pica client, including both Pica tools, MCP tools, and web search tools.
@@ -78,10 +80,23 @@ def get_tools_from_client(
         else None
     )
 
+    # Add web search tool if not disabled
+    google_custom_search_tool = (
+        GoogleCustomSearchTool(
+            api_keys=client.google_search_api_keys,
+            cx=client.google_search_engine_id,
+        )
+        if not disable_web_search
+        else None
+    )
+
     all_tools = pica_tools + mcp_tools
 
     if search_tool:
         all_tools.append(search_tool)
+
+    if google_custom_search_tool:
+        all_tools.append(google_custom_search_tool)
 
     return all_tools
 
@@ -120,7 +135,10 @@ def create_pica_agent(
     import asyncio
 
     # Create default Pica tools
-    all_tools = get_tools_from_client(client, disable_web_search)
+    all_tools = get_tools_from_client(
+        client,
+        disable_web_search,
+    )
 
     # Combine default tools with any user-provided tools
     if tools:

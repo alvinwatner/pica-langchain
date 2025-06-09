@@ -1,6 +1,10 @@
+import requests
 from typing import Dict, Any, Optional, ClassVar, List
 from langchain.tools import BaseTool
 from langchain_community.tools import DuckDuckGoSearchResults
+from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
+from langchain_community.tools.playwright.utils import create_sync_playwright_browser
+
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
     CallbackManagerForToolRun,
@@ -414,3 +418,252 @@ class WebSearchSchema(BaseModel):
     query: str = Field(description="The search query to look up information on the web")
 
 WebSearchTool.args_schema = WebSearchSchema
+
+
+
+
+class GoogleCustomSearchTool(BaseTool):
+    """Tool that uses Google Custom Search API as a last resort when other search methods fail."""
+    
+    name: str = "google_custom_search"
+    description: str = "Search the web using Google Custom Search API when other search methods fail. This is a last resort search tool that provides comprehensive results."
+    
+    api_keys: List[str] = Field(default=None, exclude=True)
+    cx: str = Field(default=None, exclude=True)
+    base_url: str = Field(default="https://www.googleapis.com/customsearch/v1", exclude=True)
+    timeout: int = Field(default=30, exclude=True)
+    max_results: int = Field(default=10, exclude=True)
+    
+    def __init__(
+        self, 
+        api_keys: Optional[List[str]] = None,
+        cx: str = "405e625c354154a3b",
+        base_url: str = "https://www.googleapis.com/customsearch/v1",
+        timeout: int = 30,
+        max_results: int = 10,
+        **kwargs
+    ):
+        """Initialize the Google Custom Search tool.
+        
+        Args:
+            api_keys: List of Google Custom Search API keys. Will be tried in order.
+            cx: The custom search engine ID.
+            base_url: Base URL for the Google Custom Search API.
+            timeout: Timeout in seconds for API requests.
+            max_results: Maximum number of search results to return.
+        """
+        # Ensure api_keys is a list
+        if isinstance(api_keys, str):
+            api_keys = [api_keys]
+        
+        kwargs["api_keys"] = api_keys
+        kwargs["cx"] = cx
+        kwargs["base_url"] = base_url
+        kwargs["timeout"] = timeout
+        kwargs["max_results"] = max_results
+        
+        super().__init__(**kwargs)
+    
+    def _make_search_request(self, query: str, api_key: str) -> dict:
+        """Make a search request to Google Custom Search API.
+        
+        Args:
+            query: The search query.
+            api_key: The API key to use.
+            
+        Returns:
+            JSON response from the API.
+            
+        Raises:
+            requests.RequestException: If the request fails.
+        """
+        params = {
+            "key": api_key,
+            "cx": self.cx,
+            "q": query,
+            "num": self.max_results
+        }
+        
+        logger.info(f"Making Google Custom Search request for query: {query}")
+        response = requests.get(
+            self.base_url,
+            params=params,
+            timeout=self.timeout
+        )
+        
+        # Check for HTTP errors
+        response.raise_for_status()
+        
+        # Check for API errors
+        data = response.json()
+        if "error" in data:
+            error_message = data["error"].get("message", "Unknown API error")
+            raise requests.RequestException(f"Google Custom Search API error: {error_message}")
+        
+        return data
+    
+    def _format_search_results(self, api_response: dict) -> str:
+        """Format the Google Custom Search API response for LLM consumption.
+        
+        Args:
+            api_response: Raw response from Google Custom Search API.
+            
+        Returns:
+            JSON string with formatted search results.
+        """
+        try:
+            # Extract search information
+            search_info = api_response.get("searchInformation", {})
+            total_results = search_info.get("totalResults", "0")
+            search_time = search_info.get("formattedSearchTime", "0")
+            
+            # Extract and format search results
+            items = api_response.get("items", [])
+            results = []
+            
+            for item in items:
+                result = {
+                    "title": item.get("title", ""),
+                    "link": item.get("link", ""),
+                    "snippet": item.get("snippet", ""),
+                    "displayLink": item.get("displayLink", ""),
+                    "formattedUrl": item.get("formattedUrl", "")
+                }
+                
+                # Add additional metadata if available
+                pagemap = item.get("pagemap", {})
+                if pagemap:
+                    # Extract useful metadata
+                    metatags = pagemap.get("metatags", [])
+                    if metatags and isinstance(metatags, list) and len(metatags) > 0:
+                        meta = metatags[0]
+                        result["metadata"] = {
+                            "og_title": meta.get("og:title", ""),
+                            "og_description": meta.get("og:description", ""),
+                            "og_image": meta.get("og:image", "")
+                        }
+                
+                results.append(result)
+            
+            # Format the final response
+            formatted_response = {
+                "results": results,
+                "search_metadata": {
+                    "total_results": total_results,
+                    "search_time": search_time,
+                    "results_count": len(results)
+                },
+                "source": "google_custom_search",
+                "query": api_response.get("queries", {}).get("request", [{}])[0].get("searchTerms", "")
+            }
+            
+            logger.info(f"Successfully formatted {len(results)} search results")
+            return json.dumps(formatted_response, ensure_ascii=False, indent=2)
+            
+        except Exception as e:
+            logger.error(f"Error formatting search results: {str(e)}")
+            # Return a basic format if detailed formatting fails
+            items = api_response.get("items", [])
+            basic_results = []
+            
+            for item in items:
+                basic_results.append({
+                    "title": item.get("title", ""),
+                    "link": item.get("link", ""),
+                    "snippet": item.get("snippet", "")
+                })
+            
+            return json.dumps({
+                "results": basic_results,
+                "source": "google_custom_search",
+                "error": f"Formatting error: {str(e)}"
+            })
+    
+    def _run(
+        self, 
+        query: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Run the tool to search using Google Custom Search API.
+        
+        Args:
+            query: The search query.
+            run_manager: Callback manager for the tool run.
+            
+        Returns:
+            JSON string with the search results.
+        """
+        logger.info(f"Starting Google Custom Search for query: {query}")
+        
+        if not self.api_keys:
+            error_msg = "No Google Custom Search API keys configured"
+            logger.error(error_msg)
+            return json.dumps({"error": error_msg})
+        
+        # Try each API key in order
+        for i, api_key in enumerate(self.api_keys):
+            try:
+                logger.info(f"Trying API key {i + 1}/{len(self.api_keys)}")
+                
+                # Make the search request
+                api_response = self._make_search_request(query, api_key)
+                
+                # Format and return the results
+                formatted_results = self._format_search_results(api_response)
+                
+                logger.info(f"Google Custom Search successful with API key {i + 1}")
+                return formatted_results
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"Timeout with API key {i + 1}")
+                if i == len(self.api_keys) - 1:  # Last key
+                    return json.dumps({"error": "All API keys timed out"})
+                continue
+                
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 403:
+                    logger.warning(f"API key {i + 1} quota exceeded or invalid: {str(e)}")
+                    if i == len(self.api_keys) - 1:  # Last key
+                        return json.dumps({"error": "All API keys exhausted or invalid"})
+                    continue
+                else:
+                    logger.warning(f"HTTP error with API key {i + 1}: {str(e)}")
+                    if i == len(self.api_keys) - 1:  # Last key
+                        return json.dumps({"error": f"HTTP error: {str(e)}"})
+                    continue
+                    
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Request failed with API key {i + 1}: {str(e)}")
+                if i == len(self.api_keys) - 1:  # Last key
+                    return json.dumps({"error": f"Request failed: {str(e)}"})
+                continue
+                
+            except Exception as e:
+                logger.error(f"Unexpected error with API key {i + 1}: {str(e)}")
+                if i == len(self.api_keys) - 1:  # Last key
+                    return json.dumps({"error": f"Unexpected error: {str(e)}"})
+                continue
+        
+        # This should never be reached, but just in case
+        return json.dumps({"error": "All search attempts failed"})
+    
+    async def _arun(
+        self, 
+        query: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Async version of the run method.
+        
+        Note: This implementation uses the synchronous requests library.
+        For a production async implementation, consider using aiohttp.
+        """
+        return self._run(query=query)
+
+
+class GoogleCustomSearchSchema(BaseModel):
+    query: str = Field(description="The search query to look up information using Google Custom Search API")
+
+
+GoogleCustomSearchTool.args_schema = GoogleCustomSearchSchema

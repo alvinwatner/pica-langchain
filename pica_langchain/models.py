@@ -281,6 +281,14 @@ class PicaClientOptions(BaseModel):
         default=None,
         description="Firecrawl API keys for web search"
     )
+    google_search_api_keys: Optional[List[str]] = Field(
+        default=None,
+        description="Google Custom Search API keys for web search"
+    )
+    google_search_engine_id: Optional[str] = Field(
+        default=None,
+        description="Google Custom Search API engine ID for web search"
+    )
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True
