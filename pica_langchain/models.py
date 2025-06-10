@@ -156,7 +156,7 @@ class ConnectionDefinition(BaseModel):
 
 class Connection(BaseModel):
     """Model for a connection."""
-    _id: str
+    id: str = Field(alias="_id")
     platform_version: str = Field(alias="platformVersion")
     connectionDefinitionId: Optional[str] = None
     name: Optional[str] = None

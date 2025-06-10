@@ -298,6 +298,169 @@ class PromptToConnectPlatformSchema(BaseModel):
 PromptToConnectPlatformTool.args_schema = PromptToConnectPlatformSchema
 
 
+class ReinitiateConnectionTool(BaseTool):
+    """Tool for reinitiating a connection to a platform by deleting the existing connection and prompting for reconnection."""
+    
+    name: ClassVar[str] = "reinitiate_connection"
+    description: ClassVar[str] = "Reinitiate a connection to a platform by deleting the existing connection and prompting the user to reconnect. Use this when a connection is having issues and needs to be reset."    
+    client: PicaClient
+    
+    def _delete_connection(self, connection_id: str) -> dict:
+        """
+        Delete a connection using the Pica API.
+        
+        Args:
+            connection_id: The connection ID to delete.
+            
+        Returns:
+            API response as dictionary.
+        """
+        url = f"{self.client.base_url}/v1/vault/connections/{connection_id}"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-pica-secret": self.client.secret
+        }
+        
+        try:
+            logger.info(f"Deleting connection: {connection_id}")
+            
+            response = requests.delete(url, headers=headers, timeout=35)
+            response.raise_for_status()
+            
+            logger.info(f"Successfully deleted connection: {connection_id}")
+            return {
+                "success": True, 
+                "message": "Connection deleted successfully",
+                "status_code": response.status_code
+            }
+            
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Connection {connection_id} not found (404)")
+                return {
+                    "success": False, 
+                    "error": "Connection not found or already deleted",
+                    "status_code": 404
+                }
+            elif e.response.status_code == 403:
+                logger.error(f"Forbidden access to connection {connection_id} (403)")
+                return {
+                    "success": False, 
+                    "error": "Access denied. Check your permissions or API secret.",
+                    "status_code": 403
+                }
+            else:
+                logger.error(f"HTTP error deleting connection {connection_id}: {str(e)}")
+                return {
+                    "success": False, 
+                    "error": f"HTTP error: {e.response.status_code} - {str(e)}",
+                    "status_code": e.response.status_code
+                }
+                
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout deleting connection {connection_id}")
+            return {
+                "success": False, 
+                "error": "Request timeout. Please try again.",
+                "status_code": None
+            }
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error deleting connection {connection_id}: {str(e)}")
+            return {
+                "success": False, 
+                "error": f"Request failed: {str(e)}",
+                "status_code": None
+            }
+            
+        except Exception as e:
+            logger.error(f"Unexpected error deleting connection {connection_id}: {str(e)}")
+            return {
+                "success": False, 
+                "error": f"Unexpected error: {str(e)}",
+                "status_code": None
+            }
+    
+    def _run(
+        self, 
+        platform_name: str,
+        connection_id: str,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Run the tool to reinitiate connection to a platform.
+        
+        Args:
+            platform_name: The platform to reinitiate connection for.
+            connection_id: The connection ID to delete (format: conn::xxx::yyy).
+            run_manager: Callback manager for the tool run.
+            
+        Returns:
+            JSON string with the result.
+        """
+        logger.info(f"Reinitiating connection for platform: {platform_name}, connection ID: {connection_id}")
+        
+        # Validate connection ID format
+        if not connection_id.startswith("conn::"):
+            error_response = {
+                "success": False,
+                "platform": platform_name,
+                "connection_id": connection_id,
+                "error": "Invalid connection ID format. Expected format: conn::xxx::yyy",
+                "action": "check_connection_id"
+            }
+            return json.dumps(error_response, default=str)
+        
+        # Delete the existing connection
+        deletion_result = self._delete_connection(connection_id)
+        
+        if not deletion_result.get("success"):
+            error_response = {
+                "success": False,
+                "platform": platform_name,
+                "connection_id": connection_id,
+                "error": deletion_result.get("error"),
+                "status_code": deletion_result.get("status_code"),
+                "action": "deletion_failed"
+            }
+            return json.dumps(error_response, default=str)
+        
+        # Return success response prompting for reconnection (similar to PromptToConnectPlatformTool)
+        success_response = {
+            "success": True,
+            "platform": platform_name,
+            "connection_id": connection_id,
+            "action": "reconnect_required",
+            "message": f"Successfully removed existing connection for {platform_name}. Please reconnect to continue using this platform."
+        }
+        
+        logger.info(f"Successfully reinitiated connection process for {platform_name}")
+        return json.dumps(success_response, default=str)
+    
+    async def _arun(
+        self, 
+        platform_name: str,
+        connection_id: str,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Async version of the run method.
+        """
+        return self._run(platform_name=platform_name, connection_id=connection_id)
+
+
+class ReinitiateConnectionSchema(BaseModel):
+    platform_name: str = Field(
+        description="The platform name to reinitiate connection for. Use the exact platform identifier (e.g., 'gmail', 'google-drive', 'github')."
+    )
+    connection_id: str = Field(
+        description="The connection ID to delete, in format conn::xxx::yyy. Extract this from the system prompt's connection list for the specified platform."
+    )
+
+
+ReinitiateConnectionTool.args_schema = ReinitiateConnectionSchema
+
 class WebSearchTool(BaseTool):
     """Tool that provides web search with multiple fallback mechanisms."""
     
