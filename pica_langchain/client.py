@@ -236,7 +236,7 @@ class PicaClient:
         
         return (
             "\t* " + "\n\t* ".join([
-                f"{conn.platform} - Key: {conn.key}" 
+                f"{conn.platform} - Key: {conn.key} - ID: {conn.id}" 
                 for conn in filtered_connections
             ])
             if filtered_connections 
