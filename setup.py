@@ -12,6 +12,12 @@ setup(
         "firecrawl-py>=2.8.0",
         "pydantic==2.10.6",
         "requests==2.32.3",
+        "PyMuPDF==1.26.0",
+        "PyPDF2==3.0.1",
+        "pillow==11.2.1",
+        "openpyxl==3.1.5",
+        "pandas==2.3.0",
+        "pytesseract==0.3.13",
         "requests-toolbelt>=1.0.0",
     ],
     extras_require={
