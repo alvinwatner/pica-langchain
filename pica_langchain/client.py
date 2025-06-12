@@ -89,6 +89,7 @@ class PicaClient:
         self.firecrawl_api_keys = options.firecrawl_api_keys 
         self.google_search_api_keys = options.google_search_api_keys
         self.google_search_engine_id = options.google_search_engine_id
+        self.openai_api_key = options.openai_api_key
 
     def initialize(self) -> None:
         """

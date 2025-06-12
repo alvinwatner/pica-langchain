@@ -102,7 +102,10 @@ def get_tools_from_client(
     # Create file processing tools if files are uploaded
     file_tools = []
     if uploaded_files:
-        file_tools = create_file_processing_tools(uploaded_files)
+        file_tools = create_file_processing_tools(
+            uploaded_files,
+            openai_api_key=client.openai_api_key,
+        )
         logger.info(f"Created {len(file_tools)} file processing tools")
 
     # Combine all tools

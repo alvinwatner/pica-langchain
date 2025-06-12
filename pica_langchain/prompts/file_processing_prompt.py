@@ -62,10 +62,32 @@ AVAILABLE FILE PROCESSING TOOLS:
     
     if 'Image' in file_types:
         instructions += """
-- analyze_image: Process image files directly
-  * Operations: get_info, extract_text, get_base64
-  * Usage: analyze_image(file_path="/path/to/image.png", operation="extract_text")
-  * No connection required - this is a local tool
+- Image Analysis: Use analyze_image with operations:
+  * get_info: Get image properties (dimensions, format, mode)
+  * extract_text: Extract text from images using OCR
+  * describe_image: General AI vision analysis to understand image content
+  * analyze_content: IMPORTANT - Use this when user asks specific questions about the image
+  * comprehensive_analysis: Combined OCR + AI vision + basic info
+
+CRITICAL for Image Analysis:
+
+When user asks specific questions about an image (e.g., "Who is this person?", "What are they doing?", "How many people?"), use analyze_content operation
+ALWAYS pass the user's exact question as the query parameter when using analyze_content
+Example: If user asks "Who are the people in this image?", call analyze_image with operation="analyze_content" and query="Who are the people in this image?"
+
+Process:
+
+Always specify the correct file_path parameter when calling these tools
+For specific image questions, use analyze_content with the user's question as query
+Choose appropriate operation based on user's request
+Summarize findings in a clear, actionable format
+Reference files by their original filename when responding
+
+Example Tool Calls:
+
+User: "Who is in this image?" → analyze_image(file_path="...", operation="analyze_content", query="Who is in this image?")
+User: "Count the cars" → analyze_image(file_path="...", operation="analyze_content", query="Count the cars")
+User: "What do you see?" → analyze_image(file_path="...", operation="describe_image")
 """
     
     instructions += """

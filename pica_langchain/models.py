@@ -289,6 +289,10 @@ class PicaClientOptions(BaseModel):
         default=None,
         description="Google Custom Search API engine ID for web search"
     )
+    openai_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key for image analysis"
+    )    
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True

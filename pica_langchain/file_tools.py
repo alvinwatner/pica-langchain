@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional, ClassVar, List
 from pathlib import Path
 
 import pandas as pd
+from openai import OpenAI
 from langchain.tools import BaseTool
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
@@ -221,15 +222,99 @@ class ExcelAnalysisTool(BaseTool):
 
 
 class ImageAnalysisTool(BaseTool):
-    """Tool for analyzing images"""
+    """Tool for analyzing images with OCR, basic properties, and AI vision"""
     
     name: ClassVar[str] = "analyze_image"
-    description: ClassVar[str] = "Analyze images - get image info, extract text via OCR, get basic properties"
+    description: ClassVar[str] = """Analyze images using AI vision, OCR, or get basic properties. 
+    
+    IMPORTANT: When the user asks specific questions about an image (like 'Who is this person?', 'What are they doing?', 'Count the objects'), 
+    use operation 'analyze_content' and pass the user's exact question as the 'query' parameter.
+    
+    Operations:
+    - get_info: Get basic image properties
+    - extract_text: Extract text using OCR  
+    - describe_image: General AI description of image content
+    - analyze_content: Answer specific questions about the image (USE THIS for user questions)
+    - comprehensive_analysis: Combined analysis (OCR + AI vision + properties)
+    """
+
+    openai_client: OpenAI = Field(default=None, exclude=True)
+    
+    def __init__(self, openai_api_key: Optional[str] = None, **kwargs):
+        if openai_api_key:
+            kwargs["openai_client"] = OpenAI(api_key=openai_api_key)
+        else:
+            kwargs["openai_client"] = OpenAI()
+        super().__init__(**kwargs)
+    
+    def _encode_image_to_base64(self, file_path: str) -> str:
+        """Encode image to base64 string"""
+        with open(file_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+    
+    def _analyze_image_with_vision(self, file_path: str, query: Optional[str] = None) -> dict:
+        """Analyze image using GPT-4 Vision model"""
+        if not self.openai_client:
+            return {"error": "OpenAI client not available", "success": False}
+        
+        try:
+            # Encode image to base64
+            base64_image = self._encode_image_to_base64(file_path)
+            
+            # Determine image format
+            image_format = "jpeg"
+            if file_path.lower().endswith('.png'):
+                image_format = "png"
+            elif file_path.lower().endswith('.gif'):
+                image_format = "gif"
+            elif file_path.lower().endswith('.webp'):
+                image_format = "webp"
+            
+            # Default query if none provided
+            if not query:
+                query = "Describe what you see in this image. Include details about objects, people, text, colors, setting, and any other notable features."
+            
+            logger.info(f"Analyzing image with vision model: {query}")
+
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": query},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/{image_format};base64,{base64_image}",
+                                    "detail": "high" 
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1000,
+                temperature=0.1,
+            )
+            
+            description = response.choices[0].message.content
+            
+            return {
+                "description": description,
+                "model_used": "gpt-4.1-mini",
+                "query": query,
+                "success": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error analyzing image with vision model: {e}")
+            return {"error": f"Vision analysis failed: {str(e)}", "success": False}
     
     def _run(
         self,
         file_path: str,
         operation: str = "get_info",
+        query: Optional[str] = None,
         run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
         """
@@ -237,7 +322,8 @@ class ImageAnalysisTool(BaseTool):
         
         Args:
             file_path: Path to the image file
-            operation: Operation to perform (get_info, extract_text, get_base64)
+            operation: Operation to perform (get_info, extract_text, get_base64, describe_image, analyze_content)
+            query: Optional custom query for vision analysis
         """
         try:
             if not os.path.exists(file_path):
@@ -271,12 +357,50 @@ class ImageAnalysisTool(BaseTool):
                     result = {"error": "OCR not available", "success": False}
             
             elif operation == "get_base64":
-                with open(file_path, "rb") as img_file:
-                    base64_string = base64.b64encode(img_file.read()).decode()
-                    result = {
-                        "base64": base64_string,
-                        "success": True
-                    }
+                base64_string = self._encode_image_to_base64(file_path)
+                result = {
+                    "base64": base64_string,
+                    "success": True
+                }
+            
+            elif operation in ["describe_image", "analyze_content", "vision_analysis"]:
+                # Use AI vision to understand the image content
+                result = self._analyze_image_with_vision(file_path, query)
+            
+            elif operation == "comprehensive_analysis":
+                # Combine multiple analysis methods
+                comprehensive_result = {"success": True, "analyses": {}}
+                
+                # Get basic info
+                if Image:
+                    with Image.open(file_path) as img:
+                        comprehensive_result["analyses"]["basic_info"] = {
+                            "format": img.format,
+                            "size": img.size,
+                            "width": img.width,
+                            "height": img.height,
+                        }
+                
+                # Extract text via OCR
+                if Image and pytesseract:
+                    with Image.open(file_path) as img:
+                        text = pytesseract.image_to_string(img).strip()
+                        comprehensive_result["analyses"]["extracted_text"] = text
+                
+                # AI vision analysis
+                vision_result = self._analyze_image_with_vision(file_path, query)
+                if vision_result.get("success"):
+                    comprehensive_result["analyses"]["ai_description"] = vision_result["description"]
+                else:
+                    comprehensive_result["analyses"]["ai_description"] = "Vision analysis not available"
+                
+                result = comprehensive_result
+            
+            else:
+                result = {
+                    "error": f"Unknown operation: {operation}. Available operations: get_info, extract_text, get_base64, describe_image, analyze_content, comprehensive_analysis",
+                    "success": False
+                }
             
             return json.dumps(result, default=str)
             
@@ -287,6 +411,20 @@ class ImageAnalysisTool(BaseTool):
     async def _arun(self, **kwargs) -> str:
         return self._run(**kwargs)
 
+
+# Updated schema for the enhanced tool
+class ImageAnalysisSchema(BaseModel):
+    file_path: str = Field(description="Path to the image file")
+    operation: str = Field(
+        default="get_info", 
+        description="Operation: get_info, extract_text, get_base64, describe_image, analyze_content, comprehensive_analysis"
+    )
+    query: Optional[str] = Field(
+        None, 
+        description="Custom query for vision analysis (e.g., 'Count the number of people in this image')"
+    )
+
+ImageAnalysisTool.args_schema = ImageAnalysisSchema
 
 # Pydantic schemas for tool validation
 class PDFAnalysisSchema(BaseModel):
@@ -311,7 +449,10 @@ ExcelAnalysisTool.args_schema = ExcelAnalysisSchema
 ImageAnalysisTool.args_schema = ImageAnalysisSchema
 
 
-def create_file_processing_tools(uploaded_files: List[Dict[str, Any]]) -> List[BaseTool]:
+def create_file_processing_tools(
+    uploaded_files: List[Dict[str, Any]],
+    openai_api_key: Optional[str] = None
+) -> List[BaseTool]:
     """
     Create file processing tools based on uploaded files
     
@@ -336,6 +477,6 @@ def create_file_processing_tools(uploaded_files: List[Dict[str, Any]]) -> List[B
         elif file_type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
             tools.append(ExcelAnalysisTool())
         elif file_type.startswith('image/'):
-            tools.append(ImageAnalysisTool())
+            tools.append(ImageAnalysisTool(openai_api_key=openai_api_key))
     
     return tools
