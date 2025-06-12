@@ -20,7 +20,7 @@ from .tools import (
     GoogleCustomSearchTool,
 )
 
-from .file_tools import create_file_processing_tools 
+from .file_tools import create_file_processing_tools
 from .logger import get_logger
 
 
@@ -78,18 +78,26 @@ def get_tools_from_client(
     # Add web search tools if not disabled
     search_tools = []
     if not disable_web_search:
-        if hasattr(client, 'serper_api_keys') and client.serper_api_keys:
-            search_tools.append(WebSearchTool(
-                serper_api_keys=client.serper_api_keys,
-                firecrawl_api_keys=getattr(client, 'firecrawl_api_keys', None),
-            ))
-        
-        if (hasattr(client, 'google_search_api_keys') and client.google_search_api_keys and
-            hasattr(client, 'google_search_engine_id') and client.google_search_engine_id):
-            search_tools.append(GoogleCustomSearchTool(
-                api_keys=client.google_search_api_keys,
-                cx=client.google_search_engine_id,
-            ))
+        if hasattr(client, "serper_api_keys") and client.serper_api_keys:
+            search_tools.append(
+                WebSearchTool(
+                    serper_api_keys=client.serper_api_keys,
+                    firecrawl_api_keys=getattr(client, "firecrawl_api_keys", None),
+                )
+            )
+
+        if (
+            hasattr(client, "google_search_api_keys")
+            and client.google_search_api_keys
+            and hasattr(client, "google_search_engine_id")
+            and client.google_search_engine_id
+        ):
+            search_tools.append(
+                GoogleCustomSearchTool(
+                    api_keys=client.google_search_api_keys,
+                    cx=client.google_search_engine_id,
+                )
+            )
 
     # Create file processing tools if files are uploaded
     file_tools = []
@@ -99,37 +107,40 @@ def get_tools_from_client(
 
     # Combine all tools
     all_tools = pica_tools + mcp_tools + search_tools + file_tools
-    
+
     return all_tools
 
 
 def generate_file_processing_instructions(uploaded_files: List[Dict[str, Any]]) -> str:
     """
     Generate instructions for the agent on how to use file processing tools.
-    
+
     Args:
         uploaded_files: List of uploaded file information
-        
+
     Returns:
         Instructions string for the agent
     """
     file_types = set()
     file_list = []
-    
+
     for file_info in uploaded_files:
-        content_type = file_info.get('type', '').lower()
-        filename = file_info.get('name', 'unknown')
-        file_path = file_info.get('path', '')
-        
+        content_type = file_info.get("type", "").lower()
+        filename = file_info.get("name", "unknown")
+        file_path = file_info.get("path", "")
+
         file_list.append(f"- {filename} ({content_type}) at path: {file_path}")
-        
-        if 'pdf' in content_type:
-            file_types.add('PDF')
-        elif content_type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
-            file_types.add('Excel')
-        elif content_type.startswith('image/'):
-            file_types.add('Image')
-    
+
+        if "pdf" in content_type:
+            file_types.add("PDF")
+        elif content_type in [
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ]:
+            file_types.add("Excel")
+        elif content_type.startswith("image/"):
+            file_types.add("Image")
+
     instructions = f"""
 
 FILE PROCESSING CAPABILITIES:
@@ -146,31 +157,31 @@ IMPORTANT: File processing tools are LOCAL tools, not Pica platform tools:
 
 AVAILABLE FILE PROCESSING TOOLS:
 """
-    
-    if 'PDF' in file_types:
+
+    if "PDF" in file_types:
         instructions += """
 - analyze_pdf: Process PDF files directly
   * Operations: extract_text, get_info, search
   * Usage: analyze_pdf(file_path="/path/to/file.pdf", operation="extract_text")
   * No connection required - this is a local tool
 """
-    
-    if 'Excel' in file_types:
+
+    if "Excel" in file_types:
         instructions += """
 - analyze_excel: Process Excel files directly  
   * Operations: get_info, extract_data, summary_stats, search
   * Usage: analyze_excel(file_path="/path/to/file.xlsx", operation="get_info")
   * No connection required - this is a local tool
 """
-    
-    if 'Image' in file_types:
+
+    if "Image" in file_types:
         instructions += """
 - analyze_image: Process image files directly
   * Operations: get_info, extract_text, get_base64
   * Usage: analyze_image(file_path="/path/to/image.png", operation="extract_text")
   * No connection required - this is a local tool
 """
-    
+
     instructions += """
 WORKFLOW FOR FILE PROCESSING:
 1. When user asks about uploaded files, use file processing tools DIRECTLY
@@ -184,7 +195,7 @@ EXAMPLES:
 - "Extract text from image" → Use analyze_image tool directly
 - "Send an email" → Use Pica platform workflow (getAvailableActions for gmail, etc.)
 """
-    
+
     return instructions
 
 
@@ -196,16 +207,16 @@ def generate_system_prompt(
 ) -> str:
     """
     Generate the system prompt for Pica agents.
-    
+
     This function handles the logic for combining the default Pica system prompt with any
     custom system prompt, handling asyncio runtime contexts, and adding file processing instructions.
-    
+
     Args:
         client: The Pica client to use.
         system_prompt: Optional custom system prompt to prepend to the Pica system prompt.
         override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
         uploaded_files: List of uploaded file information for creating file processing instructions.
-        
+
     Returns:
         The combined system prompt string.
     """
@@ -221,10 +232,12 @@ def generate_system_prompt(
                 loop = asyncio.get_running_loop()
                 # Create a basic custom prompt with required information
                 combined_system_prompt = f"{system_prompt}\n<connections_info>\n{client.connections_info}\n</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n</mcp_tools_info>"
-                
+
                 # Add file processing instructions
                 if uploaded_files:
-                    file_instructions = generate_file_processing_instructions(uploaded_files)
+                    file_instructions = generate_file_processing_instructions(
+                        uploaded_files
+                    )
                     combined_system_prompt += f"\n<file_processing_info>\n{file_instructions}\n</file_processing_info>"
             except RuntimeError:
                 # If we're not in a running event loop, we can use asyncio.run
@@ -234,7 +247,9 @@ def generate_system_prompt(
                     )
                 )
                 if uploaded_files:
-                    file_instructions = generate_file_processing_instructions(uploaded_files)
+                    file_instructions = generate_file_processing_instructions(
+                        uploaded_files
+                    )
                     combined_system_prompt += f"\n<file_processing_info>\n{file_instructions}\n</file_processing_info>"
         else:
             try:
@@ -243,13 +258,16 @@ def generate_system_prompt(
                 combined_system_prompt = client.system
                 if system_prompt:
                     from .prompts import generate_full_system_prompt
+
                     combined_system_prompt = generate_full_system_prompt(
                         combined_system_prompt, system_prompt
                     )
-                
+
                 # Add file processing instructions
                 if uploaded_files:
-                    file_instructions = generate_file_processing_instructions(uploaded_files)
+                    file_instructions = generate_file_processing_instructions(
+                        uploaded_files
+                    )
                     combined_system_prompt += f"\n<file_processing_info>\n{file_instructions}\n</file_processing_info>"
             except RuntimeError:
                 # If we're not in a running event loop, we can use asyncio.run
@@ -257,7 +275,9 @@ def generate_system_prompt(
                     client.generate_system_prompt(system_prompt)
                 )
                 if uploaded_files:
-                    file_instructions = generate_file_processing_instructions(uploaded_files)
+                    file_instructions = generate_file_processing_instructions(
+                        uploaded_files
+                    )
                     combined_system_prompt += f"\n<file_processing_info>\n{file_instructions}\n</file_processing_info>"
     else:
         # No custom system prompt provided, use the default
@@ -265,7 +285,7 @@ def generate_system_prompt(
         if uploaded_files:
             file_instructions = generate_file_processing_instructions(uploaded_files)
             combined_system_prompt += f"\n<file_processing_info>\n{file_instructions}\n</file_processing_info>"
-    
+
     return combined_system_prompt
 
 
@@ -320,9 +340,9 @@ def create_pica_agent(
         client=client,
         system_prompt=system_prompt,
         override_default_prompt=override_default_prompt,
-        uploaded_files=uploaded_files
+        uploaded_files=uploaded_files,
     )
-  
+
     default_agent_kwargs = {"system_message": combined_system_prompt}
 
     # Merge default agent kwargs with user-provided ones
@@ -353,6 +373,7 @@ def create_flutter_ui_agent(
     override_default_prompt: bool = False,
     disable_web_search: bool = False,
     return_intermediate_steps: bool = False,
+    uploaded_files: Optional[List[Dict[str, Any]]] = None,
     **kwargs,
 ):
     """
@@ -374,66 +395,31 @@ def create_flutter_ui_agent(
         tools: Optional list of additional tools to include alongside the Pica tools.
         disable_web_search: If True, disables the web search tool.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
+        uploaded_files: List of uploaded file information for creating file processing tools.
         **kwargs: Additional arguments for initialize_agent.
 
     Returns:
         A Flutter UI agent.
     """
     # Create default Pica tools
-    all_tools = get_tools_from_client(client, disable_web_search)
+    all_tools = get_tools_from_client(
+        client,
+        disable_web_search,
+        uploaded_files,
+    )
 
     # Combine default tools with any user-provided tools
     if tools:
         all_tools = all_tools + tools
 
-    # Append the custom system prompt if provided
-    if system_prompt:
-        if override_default_prompt:
-            # Log a warning about overriding the default prompt
-            warnings.warn(
-                "Overriding the default Pica system prompt. This will remove all Pica-specific instructions "
-                "and may disrupt core functionality. Only use this if you know what you're doing.",
-                UserWarning,
-            )
-            # Use the user's system prompt directly, but still include the necessary connection info
-            try:
-                loop = asyncio.get_running_loop()
-                combined_system_prompt = f"{system_prompt}\n\<connections_info>\n{client.connections_info}\n\</connections_info>\n<available_platforms_info>\n{client.available_platforms_info}\n</available_platforms_info>\n<mcp_tools_info>\n{client.mcp_tools_info}\n\</mcp_tools_info>"
+    combined_system_prompt = generate_system_prompt(
+        client=client,
+        system_prompt=system_prompt,
+        override_default_prompt=override_default_prompt,
+        uploaded_files=uploaded_files,
+    )
 
-            except RuntimeError:
-                # No running event loop, safe to use asyncio.run()
-                combined_system_prompt = asyncio.run(
-                    client.generate_custom_system_prompt(
-                        system_prompt, override_default=True
-                    )
-                )
-        else:
-            # Standard behavior: append user prompt to default prompt
-            try:
-                loop = asyncio.get_running_loop()
-                # We're in an event loop, use the client.system property directly
-                # and append the user system prompt
-                combined_system_prompt = client.system
-                if system_prompt:
-                    from .prompts import generate_full_system_prompt
-
-                    combined_system_prompt = generate_full_system_prompt(
-                        combined_system_prompt, system_prompt
-                    )
-            except RuntimeError:
-                # No running event loop, safe to use asyncio.run()
-                combined_system_prompt = asyncio.run(
-                    client.generate_system_prompt(system_prompt)
-                )
-
-    else:
-        # If no custom prompt, use the default system prompt
-        combined_system_prompt = client.system
-
-    default_agent_kwargs = {
-        "system_message": combined_system_prompt,
-        "return_intermediate_steps": return_intermediate_steps,
-    }
+    default_agent_kwargs = {"system_message": combined_system_prompt}
 
     # Merge default agent kwargs with user-provided ones
     if agent_kwargs:
@@ -445,6 +431,7 @@ def create_flutter_ui_agent(
         llm,
         agent=agent_type,
         verbose=verbose,
+        return_intermediate_steps=return_intermediate_steps,
         agent_kwargs=default_agent_kwargs,
         **kwargs,
     )
@@ -554,4 +541,3 @@ class FlutterUIAgent:
             A dictionary containing the Flutter UI JSON.
         """
         return await self.acall({"input": input_text}, **kwargs)
-
