@@ -14,6 +14,7 @@ setup(
         "requests==2.32.3",
         "PyMuPDF==1.26.0",
         "PyPDF2==3.0.1",
+        "pypdf==5.6.0",
         "pillow==11.2.1",
         "openpyxl==3.1.5",
         "pandas==2.3.0",
