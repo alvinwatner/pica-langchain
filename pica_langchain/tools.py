@@ -1,4 +1,5 @@
 import requests
+import asyncio
 from typing import Dict, Any, Optional, ClassVar, List
 from langchain.tools import BaseTool
 from langchain_community.tools import DuckDuckGoSearchResults
@@ -44,9 +45,17 @@ class GetAvailableActionsTool(BaseTool):
         Returns:
             JSON string with the available actions.
         """
-        logger.info(f"Getting available actions for platform: {platform}")
+        action = f"Getting available actions for {platform} platform"
+        logger.info(action)
+        
+        # Track action start in Firestore
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, platform))
         response = self.client.get_available_actions(platform)
-        logger.debug(f"Got response with {len(response.actions or [])} actions")
+
+        action = f"Found {len(response.actions or [])} available actions for {platform}"
+        logger.debug(action)
+
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, platform))
 
         return json.dumps(response.model_dump(), default=str)
     
@@ -85,11 +94,17 @@ class GetActionKnowledgeTool(BaseTool):
         Returns:
             JSON string with the action knowledge.
         """
-        logger.info(f"Getting knowledge for action ID: {action_id} on platform: {platform}")
+        action = f"Getting knowledge for action ID: {action_id} on platform: {platform}"        
+        logger.info(action)
+        action_human = f"Getting knowledge for the associated action ID on {platform} platform"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform))
+
         response = self.client.get_action_knowledge(platform, action_id)
         
         if response.success:
-            logger.debug(f"Successfully retrieved knowledge for action: {response.action.title if response.action else 'unknown'}")
+            action = f"Successfully retrieved knowledge with action: {response.action.title if response.action else 'unknown'}"
+            logger.debug(action)
+            asyncio.create_task(self.client.action_tracking_service.update_action(action, platform))
             
             # Get platform-specific rules
             platform_rules = get_platform_rules(platform)
@@ -100,10 +115,14 @@ class GetActionKnowledgeTool(BaseTool):
                 response_dict = response.model_dump()
                 # Add platform rules to the response
                 response_dict["platform_rules"] = platform_rules
-                logger.debug(f"Adding platform-specific rules for {platform} with rules {platform_rules}")
+                action = f"Added platform-specific rules for {platform}"
+                logger.debug(action)
                 return json.dumps(response_dict, default=str)
         else:
-            logger.warning(f"Failed to get knowledge for action ID: {action_id}: {response.message}")
+            action = f"Failed to get knowledge for action ID: {action_id}: {response.message}"            
+            logger.warning(action)
+            action_human = f"Failed to get knowledge for the associated action ID on {platform} platform"
+            asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform))        
         
         return json.dumps(response.model_dump(), default=str)
     
@@ -161,13 +180,22 @@ class ExecuteTool(BaseTool):
         Returns:
             JSON string with the execution results.
         """
-        logger.info(f"Executing action ID: {action_id} on platform: {platform} with method: {method}")
+        action = f"Executing action ID: {action_id} on platform: {platform} with method: {method}"
+        logger.info(action)
+
+        # Track action start
+        action_human = f"Executing action ID on {platform} platform with {method} method"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform))
         
-        action = ActionToExecute(_id=action_id, path=action_path)
+        action = f"Preparing execution parameters for {platform} action"
+        logger.debug(action)
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, platform))
+
+        action_to_execute = ActionToExecute(_id=action_id, path=action_path)
 
         params = ExecuteParams(
             platform=platform,
-            action=action,
+            action=action_to_execute,
             method=method,
             connection_key=connection_key,
             data=data,
@@ -177,13 +205,24 @@ class ExecuteTool(BaseTool):
             is_form_data=is_form_data,
             is_url_encoded=is_url_encoded
         )
-        
+
+        action = f"Sending {method} request to {platform} API"
+        logger.debug(action)
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, platform))
+                        
         response = self.client.execute(params)
 
         if response.success:
-            logger.info(f"Successfully executed action: {response.action} on platform: {platform}")
+            action = f"Successfully executed action: {response.action} on platform: {platform}"
+            logger.info(action)
+            action_human = f"Successfully executed action on {platform} platform"
+            asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform))
         else:
-            logger.warning(f"Failed to execute action: {response.message}")
+            action = f"Failed to execute action: {response.message}"
+            logger.warning(action)
+            action_human = "Failed to execute action on {} platform.".format(platform)
+            action_human += "\nHold on this is normal, we are trying with different parameters"
+            asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform))
         
         # Remove knowledge field from response before serializing to JSON
         response_dict = response.model_dump()
@@ -272,7 +311,10 @@ class PromptToConnectPlatformTool(BaseTool):
         Returns:
             JSON string with the platform name.
         """
-        logger.info(f"Prompting user to connect to platform: {platform_name}")
+        action = f"Prompting user to connect to platform: {platform_name}"
+        logger.info(action)
+        action_human = f"Please connect to {platform_name} platform"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform_name))
         
         response = {
             "success": True,
@@ -436,6 +478,8 @@ class ReinitiateConnectionTool(BaseTool):
         }
         
         logger.info(f"Successfully reinitiated connection process for {platform_name}")
+        action_human = f"Please reconnect to {platform_name} platform"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, platform_name))                
         return json.dumps(success_response, default=str)
     
     async def _arun(
@@ -466,6 +510,7 @@ class WebSearchTool(BaseTool):
     
     name: ClassVar[str] = "web_search"
     description: ClassVar[str] = "Search the web for information about events, people, places, or concepts. Use this when you need to find information that might not be in your training data."
+    client: PicaClient
     
     ddg_search: Any = Field(default=None, exclude=True)
     serper: Any = Field(default=None, exclude=True)
@@ -525,39 +570,56 @@ class WebSearchTool(BaseTool):
         Returns:
             JSON string with the search results.
         """
-        logger.info(f"Searching the web for: {query}")
+        action =f'Searching the web using query : "{query}"'
+        logger.info(action)
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, "web"))                
         errors = {}
         
         # Try Google Serper first if available (preferred search engine)
         if self.serper:
             try:
-                logger.info("Attempting Google Serper search")
+                action = f"Attempting search using Google Serper tool"
+                logger.info(action)
+                asyncio.create_task(self.client.action_tracking_service.update_action(action, "Google Serper"))
                 results = self.serper.run(query)
                 logger.info("Google Serper search successful")
                 return results
             except Exception as e:
-                logger.warning(f"All Google Serper API keys failed: {str(e)}")
+                action = f"All Google Serper API keys failed: {str(e)}"
+                logger.warning(action)
+                action_human = "Failed to search using Google Serper"
+                asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "Google Serper"))
                 errors["serper"] = str(e)
         
         # If Google Serper failed, try Firecrawl
         if self.firecrawl:
             try:
-                logger.info("Attempting Firecrawl search")
+                action = f"Second attempt, searching using Firecrawl tool"
+                logger.info(action)
+                asyncio.create_task(self.client.action_tracking_service.update_action(action, "Firecrawl"))
                 results = self.firecrawl.run(query)
                 logger.info("Firecrawl search successful")
                 return results
             except Exception as e:
-                logger.warning(f"All Firecrawl API keys failed: {str(e)}")
+                action = f"All Firecrawl API keys failed: {str(e)}"
+                logger.warning(action)
+                action_human = "Failed to search using Firecrawl"
+                asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "Firecrawl"))
                 errors["firecrawl"] = str(e)
         
         # If both Google Serper and Firecrawl failed, try DuckDuckGo
         try:
-            logger.info("Falling back to DuckDuckGo search")
+            action = f"Third attempt, searching using DuckDuckGo tool"
+            logger.info(action)
+            asyncio.create_task(self.client.action_tracking_service.update_action(action, "DuckDuckGo"))
             results = self.ddg_search.run(query)
             logger.info("DuckDuckGo search successful")
             return results
         except Exception as e:
-            logger.warning(f"DuckDuckGo search failed: {str(e)}")
+            action = f"DuckDuckGo search failed: {str(e)}"
+            logger.warning(action)
+            action_human = "Failed to search using DuckDuckGo"
+            asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "DuckDuckGo"))
             errors["duckduckgo"] = str(e)
             
             # All search engines failed
@@ -590,6 +652,7 @@ class GoogleCustomSearchTool(BaseTool):
     
     name: str = "google_custom_search"
     description: str = "Search the web using Google Custom Search API when other search methods fail. This is a last resort search tool that provides comprehensive results."
+    client: PicaClient
     
     api_keys: List[str] = Field(default=None, exclude=True)
     cx: str = Field(default=None, exclude=True)
@@ -757,7 +820,9 @@ class GoogleCustomSearchTool(BaseTool):
         Returns:
             JSON string with the search results.
         """
-        logger.info(f"Starting Google Custom Search for query: {query}")
+        action = f"Starting Google Custom Search for query: {query}"
+        logger.info(action)
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, "Google Search API"))
         
         if not self.api_keys:
             error_msg = "No Google Custom Search API keys configured"
@@ -774,8 +839,11 @@ class GoogleCustomSearchTool(BaseTool):
                 
                 # Format and return the results
                 formatted_results = self._format_search_results(api_response)
-                
-                logger.info(f"Google Custom Search successful with API key {i + 1}")
+                                
+                action = f"Google Custom Search successful with API key {i + 1}"
+                logger.info(action)
+                action_human = f"Google Search successful! Processing the data..."
+                asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "Google Search API"))
                 return formatted_results
                 
             except requests.exceptions.Timeout:

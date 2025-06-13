@@ -293,6 +293,10 @@ class PicaClientOptions(BaseModel):
         default=None,
         description="OpenAI API key for image analysis"
     )    
+    firebase_creds_json: Optional[str] = Field(
+        default=None,
+        description="Firebase credentials JSON for action tracking"
+    )
     model_config = ConfigDict(
         populate_by_name=True,
         arbitrary_types_allowed=True

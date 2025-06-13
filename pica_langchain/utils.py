@@ -83,6 +83,7 @@ def get_tools_from_client(
                 WebSearchTool(
                     serper_api_keys=client.serper_api_keys,
                     firecrawl_api_keys=getattr(client, "firecrawl_api_keys", None),
+                    client=client,
                 )
             )
 
@@ -96,6 +97,7 @@ def get_tools_from_client(
                 GoogleCustomSearchTool(
                     api_keys=client.google_search_api_keys,
                     cx=client.google_search_engine_id,
+                    client=client,
                 )
             )
 
@@ -103,8 +105,8 @@ def get_tools_from_client(
     file_tools = []
     if uploaded_files:
         file_tools = create_file_processing_tools(
-            uploaded_files,
-            openai_api_key=client.openai_api_key,
+            client=client,
+            uploaded_files=uploaded_files,
         )
         logger.info(f"Created {len(file_tools)} file processing tools")
 

@@ -1,4 +1,5 @@
 import os
+import asyncio
 import json
 import tempfile
 import base64
@@ -14,6 +15,7 @@ from langchain.callbacks.manager import (
 )
 from pydantic import BaseModel, Field
 from langchain_community.document_loaders import PyPDFLoader
+from .client import PicaClient
 
 import fitz
 from PIL import Image
@@ -52,6 +54,7 @@ class PDFAnalysisTool(BaseTool):
     
     name: ClassVar[str] = "analyze_pdf"
     description: ClassVar[str] = "Analyze PDF documents - extract text, get page count, search content"
+    client: PicaClient
     
     def _run(
         self,
@@ -70,6 +73,11 @@ class PDFAnalysisTool(BaseTool):
             search_query: Text to search for (when operation is 'search')
             page_range: Page range like "1-5" or "1,3,5" (when operation is 'extract_pages')
         """
+        action = f"Starting PDF analysis: {operation} on file {os.path.basename(file_path)}"
+        logger.info(action)
+        action_human = f"Starting PDF analysis"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "PDF Analysis"))
+        
         try:
             if not os.path.exists(file_path):
                 return json.dumps({"error": "File not found", "success": False})
@@ -130,6 +138,7 @@ class ExcelAnalysisTool(BaseTool):
     
     name: ClassVar[str] = "analyze_excel"
     description: ClassVar[str] = "Analyze Excel files - get sheet info, extract data, perform calculations"
+    client: PicaClient
     
     def _run(
         self,
@@ -148,6 +157,10 @@ class ExcelAnalysisTool(BaseTool):
             sheet_name: Name of the sheet to analyze
             query: Search query or pandas query string
         """
+        action = f"Starting Excel analysis: {operation} on file {os.path.basename(file_path)}"
+        logger.info(action)
+        asyncio.create_task(self.client.action_tracking_service.update_action(action, "Excel Analysis"))
+        
         try:
             if not os.path.exists(file_path):
                 return json.dumps({"error": "File not found", "success": False})
@@ -236,13 +249,13 @@ class ImageAnalysisTool(BaseTool):
     - describe_image: General AI description of image content
     - analyze_content: Answer specific questions about the image (USE THIS for user questions)
     - comprehensive_analysis: Combined analysis (OCR + AI vision + properties)
-    """
-
+    """    
     openai_client: OpenAI = Field(default=None, exclude=True)
+    client: PicaClient
     
-    def __init__(self, openai_api_key: Optional[str] = None, **kwargs):
-        if openai_api_key:
-            kwargs["openai_client"] = OpenAI(api_key=openai_api_key)
+    def __init__(self, **kwargs):
+        if self.client.openai_api_key:
+            kwargs["openai_client"] = OpenAI(api_key=self.client.openai_api_key)
         else:
             kwargs["openai_client"] = OpenAI()
         super().__init__(**kwargs)
@@ -254,11 +267,22 @@ class ImageAnalysisTool(BaseTool):
     
     def _analyze_image_with_vision(self, file_path: str, query: Optional[str] = None) -> dict:
         """Analyze image using GPT-4 Vision model"""
+        action = f"Starting AI vision analysis for: {os.path.basename(file_path)}"
+        logger.info(action)
+        action_human = f"Starting AI vision analysis"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, "AI Vision Analysis"))
+        
         if not self.openai_client:
+            error_msg = "OpenAI client not available for vision analysis"
+            logger.error(error_msg)
+            asyncio.create_task(self.client.action_tracking_service.update_action(error_msg, "AI Vision Analysis"))            
             return {"error": "OpenAI client not available", "success": False}
         
         try:
             # Encode image to base64
+            action = "Encoding image for AI vision analysis"
+            logger.info(action)
+            asyncio.create_task(self.client.action_tracking_service.update_action(action, "AI Vision Analysis"))
             base64_image = self._encode_image_to_base64(file_path)
             
             # Determine image format
@@ -269,12 +293,14 @@ class ImageAnalysisTool(BaseTool):
                 image_format = "gif"
             elif file_path.lower().endswith('.webp'):
                 image_format = "webp"
-            
+                        
             # Default query if none provided
             if not query:
                 query = "Describe what you see in this image. Include details about objects, people, text, colors, setting, and any other notable features."
             
             logger.info(f"Analyzing image with vision model: {query}")
+            action = f"Sending image to Vision Model with query: {query[:100]}..."
+            asyncio.create_task(self.client.action_tracking_service.update_action(action, "AI Vision Analysis"))
 
             response = self.openai_client.chat.completions.create(
                 model="gpt-4.1-mini",
@@ -298,13 +324,16 @@ class ImageAnalysisTool(BaseTool):
             )
             
             description = response.choices[0].message.content
+            action = "Successfully received AI vision analysis response"
+            logger.info(action)
+            asyncio.create_task(self.client.action_tracking_service.update_action(action, "AI Vision Analysis"))            
             
             return {
                 "description": description,
                 "model_used": "gpt-4.1-mini",
                 "query": query,
                 "success": True
-            }
+            }            
             
         except Exception as e:
             logger.error(f"Error analyzing image with vision model: {e}")
@@ -450,8 +479,8 @@ ImageAnalysisTool.args_schema = ImageAnalysisSchema
 
 
 def create_file_processing_tools(
+    client: PicaClient,   
     uploaded_files: List[Dict[str, Any]],
-    openai_api_key: Optional[str] = None
 ) -> List[BaseTool]:
     """
     Create file processing tools based on uploaded files
@@ -473,10 +502,10 @@ def create_file_processing_tools(
         
         # Add appropriate tools based on file type
         if 'pdf' in file_type:
-            tools.append(PDFAnalysisTool())
+            tools.append(PDFAnalysisTool(client=client))
         elif file_type in ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']:
-            tools.append(ExcelAnalysisTool())
+            tools.append(ExcelAnalysisTool(client=client))
         elif file_type.startswith('image/'):
-            tools.append(ImageAnalysisTool(openai_api_key=openai_api_key))
+            tools.append(ImageAnalysisTool(openai_api_key=openai_api_key, client=client))
     
     return tools

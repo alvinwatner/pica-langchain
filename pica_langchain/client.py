@@ -21,6 +21,7 @@ from .models import (
 )
 from .logger import get_logger, log_request_response
 from .prompts import get_default_system_prompt, get_authkit_system_prompt, generate_full_system_prompt
+from .firestore.action_service import initialize_firestore_service
 
 logger = get_logger()
 
@@ -90,6 +91,7 @@ class PicaClient:
         self.google_search_api_keys = options.google_search_api_keys
         self.google_search_engine_id = options.google_search_engine_id
         self.openai_api_key = options.openai_api_key
+        self.action_tracking_service = initialize_firestore_service(options.firebase_creds_json, options.identity)
 
     def initialize(self) -> None:
         """

@@ -29,15 +29,14 @@ def get_env_var(name: str) -> str:
 async def main():
     try:
         # Initialize the Pica client
-        pica_client = PicaClient(
-            secret=get_env_var("PICA_SECRET"),
+        pica_client = await PicaClient.create(
+            secret=os.getenv("PICA_SECRET"),
             options=PicaClientOptions(
-                # server_url="https://my-self-hosted-server.com",
-                # identity_type="user"
-                # identity="user-id",
+                identity_type="user",
+                identity="671b691a2a7d8b8b1e766357",
                 authkit=True,                
-                # Use ["*"] to initialize all available connections
-                connectors=["*"]
+                connectors=["*"],
+                firebase_creds_json=os.getenv("FIREBASE_CREDENTIALS_JSON")
             )
         )
         
@@ -55,7 +54,6 @@ async def main():
         #         callbacks=[StreamingStdOutCallbackHandler()]
         #     )
 
-        system_prompt = await pica_client.generate_system_prompt('Always start your response with `Pica works like ✨`')
 
         # Create a Pica agent with the LLM
         # This will now handle the system_prompt correctly in an async context
@@ -64,15 +62,13 @@ async def main():
             llm=llm,
             agent_type=AgentType.OPENAI_FUNCTIONS,
             return_intermediate_steps=True,
-            override_default_prompt=True,
-            system_prompt=system_prompt
         )
 
         print("\n=== TESTING ASYNC STREAMING WITH SYSTEM PROMPT ===\n")
         
         # Use astream_events for streaming with intermediate steps
         async for chunk in agent.astream_events(
-            {"input": "list all available connections"}
+            {"input": "can you check if I got any important emails on 12 June 2025?"}
         ):
             event_type = chunk.get("event")
             
@@ -100,6 +96,7 @@ async def main():
                 print(f"\n=== FINAL OUTPUT ===")
                 print(output)
                 
+        # await pica_client.action_tracking_service.cleanup_action_tracking()
         print("\n=== COMPLETED ASYNC TEST ===\n")
         
     except Exception as e:
