@@ -61,7 +61,7 @@ class GetAvailableActionsTool(BaseTool):
     
     async def _arun(
         self, 
-        platform: str, 
+        platform: str,
         run_manager: Optional[AsyncCallbackManagerForToolRun] = None
     ) -> str:
         """
@@ -340,6 +340,70 @@ class PromptToConnectPlatformSchema(BaseModel):
 PromptToConnectPlatformTool.args_schema = PromptToConnectPlatformSchema
 
 
+class RedirectToAppTool(BaseTool):
+    """Tool for redirecting the user to a specific app within the platform."""
+    
+    name: ClassVar[str] = "redirect_to_app"
+    description: ClassVar[str] = "Redirect the user to a specific app within the platform with a message and optional metadata"
+    client: PicaClient
+    
+    def _run(
+        self, 
+        app: str,
+        message: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        run_manager: Optional[CallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Run the tool to redirect to a specific app.
+        
+        Args:
+            app: The app to redirect to (e.g., 'vibe_studio').
+            message: The message to display to the user before redirecting.
+            metadata: Optional metadata to include with the redirect (e.g., query parameters).
+            run_manager: Callback manager for the tool run.
+            
+        Returns:
+            JSON string with the redirect information.
+        """
+        action = f"Redirecting user to app: {app} with message: {message}"
+        logger.info(action)
+        action_human = f"Redirecting to {app}"
+        asyncio.create_task(self.client.action_tracking_service.update_action(action_human, app))
+        
+        response = {
+            "success": True,
+            "app": app,
+            "message": message
+        }
+        
+        if metadata:
+            response["metadata"] = metadata
+        
+        return json.dumps(response, default=str)
+    
+    async def _arun(
+        self, 
+        app: str,
+        message: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+    ) -> str:
+        """
+        Async version of the run method.
+        """
+        return self._run(app=app, message=message, metadata=metadata)
+
+
+class RedirectToAppSchema(BaseModel):
+    app: str = Field(description="The app to redirect to (e.g., 'vibe_studio', 'email', 'tasks'). Use the exact app identifier.")
+    message: str = Field(description="The message to display to the user before redirecting. This should explain why the redirection is happening.")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Optional metadata to include with the redirect, such as query parameters or context information.")
+
+
+RedirectToAppTool.args_schema = RedirectToAppSchema
+
+
 class ReinitiateConnectionTool(BaseTool):
     """Tool for reinitiating a connection to a platform by deleting the existing connection and prompting for reconnection."""
     
@@ -486,7 +550,7 @@ class ReinitiateConnectionTool(BaseTool):
         self, 
         platform_name: str,
         connection_id: str,
-        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+        run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
         """
         Async version of the run method.
@@ -631,7 +695,7 @@ class WebSearchTool(BaseTool):
     async def _arun(
         self, 
         query: str,
-        run_manager: Optional[AsyncCallbackManagerForToolRun] = None
+        run_manager: Optional[CallbackManagerForToolRun] = None
     ) -> str:
         """
         Async version of the run method.

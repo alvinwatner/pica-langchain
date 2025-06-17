@@ -18,6 +18,7 @@ from .tools import (
     ReinitiateConnectionTool,
     WebSearchTool,
     GoogleCustomSearchTool,
+    RedirectToAppTool,
 )
 
 from .file_tools import create_file_processing_tools
@@ -43,13 +44,14 @@ def create_pica_tools(client: PicaClient) -> List[BaseTool]:
         GetAvailableActionsTool(client=client),
         GetActionKnowledgeTool(client=client),
         ExecuteTool(client=client),
+        RedirectToAppTool(client=client)
     ]
 
     # Add the PromptToConnectPlatformTool if AuthKit is enabled
     if hasattr(client, "_use_authkit") and client._use_authkit:
         tools.append(PromptToConnectPlatformTool(client=client))
         tools.append(ReinitiateConnectionTool(client=client))
-
+        
     return tools
 
 
