@@ -11,31 +11,19 @@ class TestPicaClient(unittest.TestCase):
         mock_response.json.return_value = {
             "rows": [
                 {
-                    "_id": "conn1",
-                    "platformVersion": "1.0",
-                    "connectionDefinitionId": "def1",
-                    "name": "Test Connection",
-                    "key": "test-conn-1",
-                    "environment": "prod",
-                    "platform": "gmail",
-                    "secretsServiceId": "sec1",
-                    "settings": {
-                        "parseWebhookBody": True,
-                        "showSecret": True,
-                        "allowCustomEvents": True,
-                        "oauth": True
-                    },
-                    "throughput": {"key": "x", "limit": 100},
-                    "createdAt": 1612345678,
-                    "updatedAt": 1612345679,
-                    "updated": True,
-                    "version": "1",
-                    "lastModifiedBy": "user1",
-                    "deleted": False,
-                    "changeLog": {},
-                    "tags": ["test"],
-                    "active": True,
-                    "deprecated": False
+                    "id": "a77e130c-ce37-4a58-831c-62f2313da46d",
+                    "platformVersion": "1.0.0",
+                    "name": None,
+                    "type": "api",
+                    "key": "test::exa::default::2a5b13860bd1405d922f1014ae227f92",
+                    "environment": "test", 
+                    "platform": "exa",
+                    "identity": "2a5b13860bd1405d922f1014ae227f92",
+                    "identityType": None,
+                    "description": "Exa is a semantic search engine built to help users find high-quality, insightful content from across the web. It focuses on meaning-based search rather than just keyword matching.",
+                    "version": "1.0.0",
+                    "state": "operational",
+                    "active": True
                 }
             ]
         }
@@ -51,8 +39,8 @@ class TestPicaClient(unittest.TestCase):
         
         mock_get.assert_called_once()
         self.assertEqual(len(client.connections), 1)
-        self.assertEqual(client.connections[0].key, "test-conn-1")
-        self.assertEqual(client.connections[0].platform, "gmail")
+        self.assertEqual(client.connections[0].key, "test::exa::default::2a5b13860bd1405d922f1014ae227f92")
+        self.assertEqual(client.connections[0].platform, "exa")
     
     @patch('requests.get')
     def test_get_available_actions(self, mock_get):
@@ -160,11 +148,8 @@ class TestPicaClient(unittest.TestCase):
                     "oauth": True
                 },
                 throughput={"key": "x", "limit": 100},
-                createdAt=1612345678,
-                updatedAt=1612345679,
                 updated=True,
                 version="1",
-                lastModifiedBy="user1",
                 deleted=False,
                 tags=["test"],
                 active=True,
@@ -203,11 +188,8 @@ class TestPicaClient(unittest.TestCase):
                     "image": "https://example.com/gmail.png",
                     "tags": ["email", "google"],
                     "oauth": True,
-                    "createdAt": 1612345678,
-                    "updatedAt": 1612345679,
                     "updated": True,
                     "version": "1",
-                    "lastModifiedBy": "user1",
                     "deleted": False,
                     "active": True,
                     "deprecated": False
@@ -265,11 +247,8 @@ class TestPicaClient(unittest.TestCase):
                     "image": "https://example.com/gmail.png",
                     "tags": ["email", "google"],
                     "oauth": True,
-                    "createdAt": 1612345678,
-                    "updatedAt": 1612345679,
                     "updated": True,
                     "version": "1",
-                    "lastModifiedBy": "user1",
                     "deleted": False,
                     "active": True,
                     "deprecated": False
@@ -308,6 +287,23 @@ class TestPicaClient(unittest.TestCase):
         self.assertEqual(client.connection_definitions[0].key, "gmail-connector")
         self.assertEqual(client.connection_definitions[0].platform, "gmail")
         self.assertTrue(client.connection_definitions[0].oauth)
+
+    def test_normalize_action_id(self):
+        client = PicaClient("fake-secret")
+        
+        test_cases = [
+            ("conn_mod_def::F_JeJ_A_TKg::cc2kvVQQTiiIiLEDauy6zQ", "conn_mod_def::F_JeJ_A_TKg::cc2kvVQQTiiIiLEDauy6zQ"),
+            ("GCQEQGUVPz4::duqxCkRtSQKWGWb5eFgyLg", "conn_mod_def::GCQEQGUVPz4::duqxCkRtSQKWGWb5eFgyLg"),
+            ("mcp_test_tool", "conn_mod_def::mcp_test_tool"),
+            ("simple_action_id", "conn_mod_def::simple_action_id"),
+            ("action:test", "conn_mod_def::action:test"),
+        ]
+        
+        for input_id, expected_output in test_cases:
+            with self.subTest(input_id=input_id):
+                result = client.normalize_action_id(input_id)
+                self.assertEqual(result, expected_output, 
+                               f"Failed for input '{input_id}': expected '{expected_output}', got '{result}'")
 
 if __name__ == '__main__':
     unittest.main()

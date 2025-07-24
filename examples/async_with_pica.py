@@ -39,11 +39,13 @@ async def main():
                 firebase_creds_json=os.getenv("FIREBASE_CREDENTIALS_JSON")
             )
         )
+
+        pica_client.initialize()
         
         # Create an LLM with streaming capability
         llm = ChatOpenAI(
             temperature=0,
-            model="gpt-4o",
+            model="gpt-4.1",
             streaming=True,
             callbacks=[StreamingStdOutCallbackHandler()]
         )

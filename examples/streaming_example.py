@@ -31,10 +31,12 @@ def main():
                 connectors=["*"], # Initialize all available connections for this example
             )
         )
+
+        pica_client.initialize()
         
         llm_with_handler = ChatOpenAI(
             temperature=0,
-            model="gpt-4o",
+            model="gpt-4.1",
             streaming=True,
             callbacks=[StreamingStdOutCallbackHandler()]
         )

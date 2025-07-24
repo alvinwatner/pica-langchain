@@ -89,11 +89,13 @@ def main():
             ),
         )
 
+        pica_client.initialize()
+
         callback_handler = CustomCallbackHandler(pica_client)
 
         llm = ChatOpenAI(
             temperature=0,
-            model="gpt-4o",
+            model="gpt-4.1",
         )
 
         agent = create_pica_agent(

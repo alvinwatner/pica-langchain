@@ -25,10 +25,14 @@ def get_env_var(name: str) -> str:
 
 def main():
     try:
+        # Create an agent with access to only the Send Email action from Gmail
         pica_client = PicaClient(
             secret=get_env_var("PICA_SECRET"),
             options=PicaClientOptions(
-                connectors=["*"], # Initialize all available connections for this example
+                connectors=["my-gmail-connector-key"],
+                actions=[
+                    "conn_mod_def::F_JeJ_A_TKg::cc2kvVQQTiiIiLEDauy6zQ"
+                ]
             )
         )
 
@@ -45,34 +49,13 @@ def main():
             client=pica_client,
             llm=llm_with_handler,
             agent_type=AgentType.OPENAI_FUNCTIONS,
-            return_intermediate_steps=True
         )
 
         for chunk in agent_with_handler.stream({
-            "input": "What actions can I perform on google calendar?"
+            "input": "What actions do I have access to with Gmail?"
         }):
-            # Check for intermediate_steps in the chunk
-            if "intermediate_steps" in chunk:
-                print("\n=== INTERMEDIATE STEPS ===")
-                for step in chunk["intermediate_steps"]:
-                    # Handle different possible formats of the step
-                    action = step[0]
-                    output = step[1]
-                    
-                    # Print action info with proper attribute access
-                    print(f"Tool: {action.tool if hasattr(action, 'tool') else 'Unknown'}")
-                    
-                    # Get the tool input (different ways it might be structured)
-                    if hasattr(action, 'tool_input'):
-                        tool_input = action.tool_input
-                    elif hasattr(action, 'args'):
-                        tool_input = action.args
-                    else:
-                        tool_input = str(action)
-                        
-                    print(f"Input: {tool_input}")
-                    print(f"Output: {output}")
-                    print("---")
+            if 'output' in chunk:
+                print(chunk['output'])
         
     except Exception as e:
         print(f"ERROR: An unexpected error occurred: {e}")

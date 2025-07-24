@@ -57,6 +57,7 @@ class AvailableAction(BaseModel):
     path: Optional[str] = None
     base_url: Optional[str] = Field(None, alias="baseUrl")
     tags: Optional[List[str]] = Field(default_factory=list)
+    method: Optional[str] = None
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -138,14 +139,10 @@ class ConnectionDefinition(BaseModel):
     image: Optional[str] = None
     tags: Optional[List[str]] = None
     oauth: Optional[bool] = None
-    created_at: int = Field(alias="createdAt")
-    updated_at: int = Field(alias="updatedAt")
-    updated: bool
     version: str
-    last_modified_by: str = Field(alias="lastModifiedBy")
-    deleted: bool
+    deleted: Optional[bool] = False
+    deprecated: Optional[bool] = None
     active: bool
-    deprecated: bool
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -166,16 +163,13 @@ class Connection(BaseModel):
     secretsServiceId: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
     throughput: Optional[Dict[str, Any]] = None
-    created_at: int = Field(alias="createdAt")
-    updated_at: int = Field(alias="updatedAt")
-    updated: bool
+    updated: Optional[bool] = False
     version: str
-    last_modified_by: str = Field(alias="lastModifiedBy")
-    deleted: bool
+    deleted: Optional[bool] = False
     change_log: Optional[List[Dict[str, Any]]] = None
     tags: Optional[List[str]] = None
     active: bool
-    deprecated: bool
+    deprecated: Optional[bool] = None
     
     model_config = ConfigDict(
         populate_by_name=True,
@@ -256,6 +250,14 @@ class PicaClientOptions(BaseModel):
     connectors: List[str] = Field(
         default_factory=list,
         description="List of connector keys to filter by. Use [\"*\"] to initialize all connections."
+    )
+    actions: Optional[List[str]] = Field(
+        default=None,
+        description="List of action ids to filter by. Default is all actions."
+    )
+    permissions: Optional[Literal["read", "write", "admin"]] = Field(
+        default=None,
+        description="Permission level to filter actions by. 'read' allows GET only, 'write' allows POST/PUT/PATCH, 'admin' allows all methods (default: 'admin')"
     )
     identity: Optional[str] = Field(
         default=None,
