@@ -811,9 +811,7 @@ class PicaClient:
                 
                 rows = data.get("rows", [])
                 total = data.get("total", 0)
-
-                if params.get("authkit"):
-                    total = 70                
+                        
                 all_results.extend(rows)
                 
                 skip += limit
