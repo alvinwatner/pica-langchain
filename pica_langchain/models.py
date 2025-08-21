@@ -291,6 +291,22 @@ class PicaClientOptions(BaseModel):
         default=None,
         description="Google Custom Search API engine ID for web search"
     )
+    use_cache: bool = Field(
+        default=True,
+        description="Enable file-based caching for connections and definitions"
+    )
+    cache_dir: Optional[str] = Field(
+        default=None,
+        description="Directory to store cache files. Defaults to ~/.pica_cache"
+    )
+    cache_ttl: int = Field(
+        default=86400,  # 24 hours
+        description="Time-to-live for cache entries in seconds"
+    )
+    force_refresh: bool = Field(
+        default=False,
+        description="Force refresh of cached data even if valid cache exists"
+    )
     openai_api_key: Optional[str] = Field(
         default=None,
         description="OpenAI API key for image analysis"

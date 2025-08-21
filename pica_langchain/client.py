@@ -22,6 +22,7 @@ from .models import (
 from .logger import get_logger, log_request_response
 from .prompts import get_default_system_prompt, get_authkit_system_prompt, generate_full_system_prompt
 from .firestore.action_service import initialize_firestore_service
+from .cache import PicaCache
 
 logger = get_logger()
 
@@ -102,6 +103,16 @@ class PicaClient:
         self.google_search_engine_id = options.google_search_engine_id
         self.openai_api_key = options.openai_api_key
         self.action_tracking_service = initialize_firestore_service(options.firebase_creds_json, options.identity)
+        
+        # Initialize cache manager
+        self.cache = PicaCache(
+            cache_dir=options.cache_dir,
+            cache_ttl=options.cache_ttl,
+            enabled=options.use_cache
+        )
+        self._force_refresh = options.force_refresh
+        if self._force_refresh:
+            logger.info("Force refresh enabled - will bypass cache")
 
     def initialize(self) -> None:
         """
@@ -824,8 +835,24 @@ class PicaClient:
             raise
     
     def _initialize_connections(self) -> None:
-        """Fetch connections from the API."""
+        """Fetch connections from the API, using cache when available."""
         try:
+            # Build cache filters
+            cache_filters = {}
+            if self._identity_filter:
+                cache_filters["identity"] = self._identity_filter
+            if self._identity_type_filter:
+                cache_filters["identity_type"] = self._identity_type_filter
+            
+            # Try to load from cache first (unless force refresh is enabled)
+            if not self._force_refresh:
+                cached_data = self.cache.load("connections", **cache_filters)
+                if cached_data:
+                    self.connections = [Connection(**conn) for conn in cached_data]
+                    logger.info(f"Loaded {len(self.connections)} connections from cache")
+                    return
+            
+            # Cache miss or force refresh - fetch from API
             logger.debug("Fetching connections from API")
             
             params: Dict[str, Any] = {}
@@ -844,7 +871,11 @@ class PicaClient:
                 )
                 
                 self.connections = [Connection(**conn) for conn in connections_data]
-                logger.info(f"Successfully fetched {len(self.connections)} connections")
+                logger.info(f"Successfully fetched {len(self.connections)} connections from API")
+                
+                # Save to cache for future use
+                self.cache.save("connections", connections_data, **cache_filters)
+                
             except Exception as e:
                 logger.error(f"Failed to paginate connections: {e}", exc_info=True)
                 raise
@@ -855,8 +886,24 @@ class PicaClient:
             self.connections = []
     
     def _initialize_connection_definitions(self) -> None:
-        """Fetch available connectors from the API."""
+        """Fetch available connectors from the API, using cache when available."""
         try:
+            # Build cache filters
+            cache_filters = {}
+            if self._use_authkit:
+                cache_filters["authkit"] = True
+            
+            # Try to load from cache first (unless force refresh is enabled)
+            if not self._force_refresh:
+                cached_data = self.cache.load("connectors", **cache_filters)
+                if cached_data:
+                    self.connection_definitions = [
+                        ConnectionDefinition(**def_) for def_ in cached_data
+                    ]
+                    logger.info(f"Loaded {len(self.connection_definitions)} connectors from cache")
+                    return
+            
+            # Cache miss or force refresh - fetch from API
             logger.debug("Fetching available connectors from API")
             
             params: Dict[str, Any] = {}
@@ -877,7 +924,11 @@ class PicaClient:
                     ConnectionDefinition(**def_) 
                     for def_ in connectors_data
                 ]
-                logger.info(f"Successfully fetched {len(self.connection_definitions)} available connectors")
+                logger.info(f"Successfully fetched {len(self.connection_definitions)} available connectors from API")
+                
+                # Save to cache for future use
+                self.cache.save("connectors", connectors_data, **cache_filters)
+                
             except Exception as e:
                 logger.error(f"Failed to paginate available connectors: {e}", exc_info=True)
                 raise
@@ -909,3 +960,41 @@ class PicaClient:
         client = cls(secret, options)
         await client.async_initialize()
         return client
+    
+    def invalidate_cache(self, cache_type: Optional[str] = None) -> int:
+        """
+        Invalidate cache entries. Useful when connections or connectors change.
+        
+        Args:
+            cache_type: Type of cache to invalidate ("connections", "connectors"), 
+                       or None to invalidate all
+                       
+        Returns:
+            Number of cache entries invalidated
+        """
+        if cache_type == "connections":
+            # Build filters for connections cache
+            filters = {}
+            if self._identity_filter:
+                filters["identity"] = self._identity_filter
+            if self._identity_type_filter:
+                filters["identity_type"] = self._identity_type_filter
+            return self.cache.invalidate("connections", **filters)
+        elif cache_type == "connectors":
+            # Build filters for connectors cache
+            filters = {}
+            if self._use_authkit:
+                filters["authkit"] = True
+            return self.cache.invalidate("connectors", **filters)
+        else:
+            # Invalidate all cache
+            return self.cache.invalidate()
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """
+        Get cache statistics and information.
+        
+        Returns:
+            Dictionary with cache statistics
+        """
+        return self.cache.get_stats()
