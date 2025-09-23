@@ -74,7 +74,7 @@ class FlutterUIFormatter:
         except Exception as e:
             logger.error(f"Error generating Flutter UI JSON: {e}", exc_info=True)
             # Fallback to a simple UI representation
-            return self._create_fallback_ui(agent_output, str(e))
+            return self._create_fallback_ui(str(e))
 
     def _create_ui_generation_prompt(self, messages: Dict[str, Any]) -> str:
         """
