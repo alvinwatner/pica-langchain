@@ -403,6 +403,15 @@ class PicaClient:
             
             logger.debug(f"Getting full action details for ID: {params.action.id}")
             full_action = self.get_single_action(params.action.id)
+
+            # Check if action has "custom" tag and add connectionKey to data if needed
+            if full_action.tags and "custom" in full_action.tags:
+                logger.debug(f"Action has 'custom' tag, adding connectionKey to request body")
+                if params.data is None:
+                    params.data = {}
+                if isinstance(params.data, dict):
+                    params.data["connectionKey"] = params.connection_key
+
             
             path = params.action.path
             template_vars = re.findall(r'\{\{([^}]+)\}\}', path)
@@ -458,28 +467,21 @@ class PicaClient:
             }
 
             if params.method.lower() != 'get':
-                # Prepare request body data and inject connectionKey if not present
-                request_data = params.data.copy() if isinstance(params.data, dict) else (params.data if params.data else {})
-
-                if isinstance(request_data, dict) and 'connectionKey' not in request_data:
-                    request_data['connectionKey'] = params.connection_key
-                    logger.debug(f"Auto-injected connectionKey into request body")
-
-                if params.is_form_data and request_data and isinstance(request_data, dict):
+                if params.is_form_data and params.data and isinstance(params.data, dict):
                     # Convert data for multipart form
                     form_fields = {}
-                    for key, value in request_data.items():
+                    for key, value in params.data.items():
                         if isinstance(value, dict):
                             form_fields[key] = (None, json.dumps(value), 'application/json')
                         else:
                             form_fields[key] = (None, str(value))
-
+                    
                     multipart_data = MultipartEncoder(fields=form_fields)
                     headers['Content-Type'] = multipart_data.content_type
                     request_config["data"] = multipart_data.to_string()
                     logger.debug("Request data formatted as multipart/form-data")
                 else:
-                    request_config["data"] = json.dumps(request_data) if request_data else None
+                    request_config["data"] = json.dumps(params.data) if params.data else None
 
             logger.debug(f"Request Config: {request_config}")
             
