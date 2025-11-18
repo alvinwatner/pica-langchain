@@ -4,9 +4,10 @@ from typing import List, Optional, Dict, Any, Union
 
 from langchain_core._api.deprecation import LangChainDeprecationWarning
 from langchain.tools import BaseTool
-from langchain.agents import AgentType, initialize_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.llms.base import BaseLLM
 from langchain.chat_models.base import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from .flutter_formatter import FlutterUIFormatter
 from .client import PicaClient
@@ -299,7 +300,7 @@ def generate_system_prompt(
 def create_pica_agent(
     client: PicaClient,
     llm: Union[BaseLLM, BaseChatModel],
-    agent_type: AgentType = AgentType.OPENAI_FUNCTIONS,
+    agent_type: Any = None,  # Deprecated parameter, kept for backward compatibility
     verbose: bool = False,
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
@@ -310,24 +311,24 @@ def create_pica_agent(
     **kwargs,
 ):
     """
-    Create a LangChain agent with Pica tools.
+    Create a LangChain agent with Pica tools using modern tool calling API.
 
     Args:
         client: The Pica client to use.
         llm: The language model to use.
-        agent_type: The type of agent to create.
+        agent_type: Deprecated - kept for backward compatibility, no longer used.
         verbose: Whether to enable verbose output.
-        agent_kwargs: Additional arguments for the agent.
+        agent_kwargs: Additional arguments for the agent (deprecated, use **kwargs instead).
         system_prompt: Optional custom system prompt to prepend to the Pica system prompt.
         tools: Optional list of additional tools to include alongside the Pica tools.
         disable_web_search: If True, disables the web search tool.
         override_default_prompt: If True, completely replaces the default system prompt with the provided system_prompt.
                                 WARNING: This will remove all Pica-specific instructions and may disrupt core functionality.
         uploaded_files: List of uploaded file information for creating file processing tools.
-        **kwargs: Additional arguments for initialize_agent.
+        **kwargs: Additional arguments for AgentExecutor.
 
     Returns:
-        A LangChain agent.
+        A LangChain AgentExecutor.
     """
     import asyncio
 
@@ -350,28 +351,33 @@ def create_pica_agent(
         uploaded_files=uploaded_files,
     )
 
-    default_agent_kwargs = {"system_message": combined_system_prompt}
+    # Create ChatPromptTemplate with required structure for modern agents
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", combined_system_prompt),
+        MessagesPlaceholder(variable_name="chat_history", optional=True),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ])
 
-    # Merge default agent kwargs with user-provided ones
-    if agent_kwargs:
-        default_agent_kwargs.update(agent_kwargs)
+    # Create the agent using modern tool calling approach
+    agent = create_tool_calling_agent(llm, all_tools, prompt)
 
-    # Create and return the agent
-    return initialize_agent(
-        all_tools,
-        llm,
-        agent=agent_type,
+    # Wrap in AgentExecutor
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=all_tools,
         verbose=verbose,
-        agent_kwargs=default_agent_kwargs,
         **kwargs,
     )
+
+    return agent_executor
 
 
 def create_flutter_ui_agent(
     client: PicaClient,
     llm: Union[BaseLLM, BaseChatModel],
     flutter_llm: BaseChatModel,
-    agent_type: AgentType = AgentType.OPENAI_FUNCTIONS,
+    agent_type: Any = None,  # Deprecated parameter, kept for backward compatibility
     verbose: bool = False,
     agent_kwargs: Optional[Dict[str, Any]] = None,
     system_prompt: Optional[str] = None,
@@ -384,15 +390,15 @@ def create_flutter_ui_agent(
     **kwargs,
 ):
     """
-    Create a Flutter UI agent with Pica tools.
+    Create a Flutter UI agent with Pica tools using modern tool calling API.
 
     Args:
         client: The Pica client to use.
         llm: The language model to use for the agent's reasoning and tool usage.
         flutter_llm: The fine-tuned OpenAI model to use for generating Flutter UI JSON.
-        agent_type: The type of agent to create.
+        agent_type: Deprecated - kept for backward compatibility, no longer used.
         verbose: Whether to enable verbose output.
-        agent_kwargs: Additional arguments for the agent.
+        agent_kwargs: Additional arguments for the agent (deprecated, use **kwargs instead).
         system_prompt: Optional custom system prompt to prepend to the Flutter system prompt.
         ui_formatter_prompt: Optional custom prompt template for generating Flutter UI JSON.
                            If provided, it will replace the default prompt template.
@@ -403,7 +409,7 @@ def create_flutter_ui_agent(
         disable_web_search: If True, disables the web search tool.
         return_intermediate_steps: Whether to return intermediate steps in the agent's output.
         uploaded_files: List of uploaded file information for creating file processing tools.
-        **kwargs: Additional arguments for initialize_agent.
+        **kwargs: Additional arguments for AgentExecutor.
 
     Returns:
         A Flutter UI agent.
@@ -426,25 +432,28 @@ def create_flutter_ui_agent(
         uploaded_files=uploaded_files,
     )
 
-    default_agent_kwargs = {"system_message": combined_system_prompt}
+    # Create ChatPromptTemplate with required structure for modern agents
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", combined_system_prompt),
+        MessagesPlaceholder(variable_name="chat_history", optional=True),
+        ("human", "{input}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
+    ])
 
-    # Merge default agent kwargs with user-provided ones
-    if agent_kwargs:
-        default_agent_kwargs.update(agent_kwargs)
+    # Create the agent using modern tool calling approach
+    agent = create_tool_calling_agent(llm, all_tools, prompt)
 
-    # Create the base agent
-    agent = initialize_agent(
-        all_tools,
-        llm,
-        agent=agent_type,
+    # Wrap in AgentExecutor
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=all_tools,
         verbose=verbose,
         return_intermediate_steps=return_intermediate_steps,
-        agent_kwargs=default_agent_kwargs,
         **kwargs,
     )
 
-    # Wrap the agent with the Flutter UI formatter
-    return FlutterUIAgent(agent, flutter_llm, ui_formatter_prompt)
+    # Wrap the agent executor with the Flutter UI formatter
+    return FlutterUIAgent(agent_executor, flutter_llm, ui_formatter_prompt)
 
 
 class FlutterUIAgent:
