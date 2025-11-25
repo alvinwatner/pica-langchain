@@ -705,6 +705,7 @@ class PicaClient:
                 params=params,
                 headers=self._generate_headers()
             )
+
             response.raise_for_status()
             
             data = response.json()
@@ -1106,8 +1107,68 @@ class PicaClient:
     def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics and information.
-        
+
         Returns:
             Dictionary with cache statistics
         """
         return self.cache.get_stats()
+
+    def get_available_connectors(self) -> List[Dict[str, Any]]:
+        """
+        Get all available connectors/platforms as raw JSON.
+        Respects authkit filter if configured.
+
+        Returns:
+            List of connector dictionaries with platform details.
+        """
+        try:
+            logger.info("Fetching available connectors as raw JSON")
+
+            params: Dict[str, Any] = {}
+
+            if self._use_authkit:
+                params["authkit"] = "true"
+                logger.debug("Adding authkit=true parameter to available connectors request")
+
+            connectors_data = self._paginate_results(
+                self.get_available_connectors_url,
+                params=params
+            )
+
+            logger.info(f"Successfully fetched {len(connectors_data)} available connectors")
+            return connectors_data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch available connectors: {e}", exc_info=True)
+            raise
+
+    def get_user_connections(self) -> List[Dict[str, Any]]:
+        """
+        Get user's connected platforms as raw JSON.
+        Respects identity and identity_type filters from PicaClientOptions.
+
+        Returns:
+            List of connection dictionaries.
+        """
+        try:
+            logger.info("Fetching user connections as raw JSON")
+
+            params: Dict[str, Any] = {}
+
+            if self._identity_filter:
+                params["identity"] = self._identity_filter
+
+            if self._identity_type_filter:
+                params["identityType"] = self._identity_type_filter
+
+            connections_data = self._paginate_results(
+                self.get_connection_url,
+                params=params
+            )
+
+            logger.info(f"Successfully fetched {len(connections_data)} user connections")
+            return connections_data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch user connections: {e}", exc_info=True)
+            raise
