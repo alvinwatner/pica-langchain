@@ -14,9 +14,21 @@ from .models import (
     ConnectionDefinition,
     AvailableAction,
     ExecuteParams,
+    ActionToExecute,
     ActionsResponse,
     ActionKnowledgeResponse,
-    ExecuteResponse
+    ExecuteResponse,
+    WorkflowStep,
+    Workflow,
+    WorkflowStepResult,
+    WorkflowExecutionResult,
+    ActionField,
+    ActionSchema,
+)
+from .workflow import (
+    create_workflow_agent,
+    get_workflow_tools,
+    generate_workflow_system_prompt,
 )
 
 __all__ = [
@@ -35,7 +47,17 @@ __all__ = [
     "ConnectionDefinition",
     "AvailableAction",
     "ExecuteParams",
+    "ActionToExecute",
     "ActionsResponse",
     "ActionKnowledgeResponse",
-    "ExecuteResponse"
+    "ExecuteResponse",
+    "WorkflowStep",
+    "Workflow",
+    "WorkflowStepResult",
+    "WorkflowExecutionResult",
+    "ActionField",
+    "ActionSchema",
+    "create_workflow_agent",
+    "get_workflow_tools",
+    "generate_workflow_system_prompt",
 ]
