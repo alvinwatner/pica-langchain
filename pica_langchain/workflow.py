@@ -6,6 +6,7 @@ Unlike create_pica_agent which handles discovery and general chat, this agent fo
 on executing workflow steps sequentially with intelligent data mapping between steps.
 """
 
+import json
 from typing import Any, Dict, List, Optional, Union
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -92,9 +93,35 @@ def _escape_braces(text: str) -> str:
     return text.replace("{", "{{").replace("}", "}}")
 
 
+def _format_payload_fields(fields: Optional[List[Dict[str, Any]]]) -> str:
+    """
+    Format webhook payload field definitions for the prompt.
+
+    Args:
+        fields: List of payload field definitions with name, type, description, required
+
+    Returns:
+        Formatted string describing the expected fields
+    """
+    if not fields:
+        return "No specific fields defined"
+
+    lines = []
+    for field in fields:
+        required = "(required)" if field.get("required", True) else "(optional)"
+        field_type = field.get("type", "string")
+        lines.append(
+            f"- **{field['name']}** ({field_type}) {required}: {field.get('description', 'No description')}"
+        )
+    return "\n".join(lines)
+
+
 def generate_workflow_system_prompt(
     workflow: Dict[str, Any],
     client: PicaClient,
+    webhook_context: Optional[str] = None,
+    webhook_payload_fields: Optional[List[Dict[str, Any]]] = None,
+    initial_data: Optional[Dict[str, Any]] = None,
 ) -> str:
     """
     Generate system prompt for workflow execution agent.
@@ -102,6 +129,9 @@ def generate_workflow_system_prompt(
     Args:
         workflow: Workflow definition with steps
         client: PicaClient for connection info
+        webhook_context: Context explaining what the webhook payload represents
+        webhook_payload_fields: Expected payload field definitions
+        initial_data: Actual payload data from webhook trigger
 
     Returns:
         System prompt string
@@ -159,13 +189,45 @@ def generate_workflow_system_prompt(
     workflow_name = _escape_braces(workflow.get("name", "Unnamed Workflow"))
     workflow_description = _escape_braces(workflow.get("description", ""))
     connections_info = _escape_braces(connections_info)
- 
+
+    # Build webhook trigger section if this is a webhook-triggered execution
+    webhook_section = ""
+    if initial_data and webhook_context:
+        # Escape the JSON to prevent template interpretation
+        escaped_initial_data = _escape_braces(json.dumps(initial_data, indent=2))
+        escaped_context = _escape_braces(webhook_context)
+        escaped_payload_fields = _escape_braces(_format_payload_fields(webhook_payload_fields))
+
+        webhook_section = f"""
+## Webhook Trigger Context
+
+**What triggered this workflow:**
+{escaped_context}
+
+**Expected payload fields:**
+{escaped_payload_fields}
+
+**Actual data received:**
+```json
+{escaped_initial_data}
+```
+
+**Instructions:**
+Use the data above to execute the workflow steps. Map the payload fields to the appropriate
+action parameters based on the field descriptions and the user instructions in each step.
+For example:
+- If a step says "send email to the customer", use the email from the payload
+- If a step says "include their name in the subject", use the name field
+- If a step says "create calendar event for follow-up", use relevant contact info
+
+"""
+
     # Use the actual values directly with single braces
     return f"""You are a Workflow Execution Agent. Your job is to execute a sequence of pre-defined workflow steps.
 
 ## Workflow: {workflow_name}
 {workflow_description}
-
+{webhook_section}
 ## Your Task
 Execute each step in the workflow SEQUENTIALLY. For each step:
 1. Read the **user_instruction** to understand what the user wants to achieve
@@ -221,6 +283,9 @@ def create_workflow_agent(
     disable_web_search: bool = False,
     uploaded_files: Optional[List[Dict[str, Any]]] = None,
     verbose: bool = False,
+    webhook_context: Optional[str] = None,
+    webhook_payload_fields: Optional[List[Dict[str, Any]]] = None,
+    initial_data: Optional[Dict[str, Any]] = None,
     **kwargs,
 ) -> AgentExecutor:
     """
@@ -261,6 +326,9 @@ def create_workflow_agent(
         disable_web_search: If True, disable web search tools
         uploaded_files: List of uploaded files for file processing
         verbose: Enable verbose logging
+        webhook_context: Context explaining what the webhook payload represents
+        webhook_payload_fields: Expected payload field definitions
+        initial_data: Actual payload data from webhook trigger
         **kwargs: Additional arguments for AgentExecutor
 
     Returns:
@@ -279,8 +347,14 @@ def create_workflow_agent(
 
     logger.info(f"Workflow agent tools: {[t.name for t in tools]}")
 
-    # Generate workflow-specific system prompt
-    system_prompt = generate_workflow_system_prompt(workflow, client)
+    # Generate workflow-specific system prompt with optional webhook data
+    system_prompt = generate_workflow_system_prompt(
+        workflow,
+        client,
+        webhook_context=webhook_context,
+        webhook_payload_fields=webhook_payload_fields,
+        initial_data=initial_data,
+    )
 
     logger.info(f'final system prompt is = {system_prompt}')
 
