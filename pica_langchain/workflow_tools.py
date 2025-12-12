@@ -8,7 +8,7 @@ visualization of workflow execution on the Flutter canvas.
 
 import asyncio
 import json
-from typing import Any, ClassVar, Dict, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 from langchain.callbacks.manager import (
     AsyncCallbackManagerForToolRun,
@@ -45,10 +45,30 @@ class WorkflowExecuteTool(BaseTool):
     # Workflow context
     workflow_id: str
     total_steps: int
+    workflow_steps: List[Dict[str, Any]] = []
 
-    # Internal state for tracking execution progress
+    # Internal state for tracking execution progress (fallback)
     # This is not a Pydantic field, but a class attribute that tracks state
     _execution_count: int = 0
+
+    def _get_step_index(self, action_id: str) -> int:
+        """Look up step index by action_id.
+
+        This is more reliable than counting tool calls because:
+        - Retries don't increment the index
+        - Each action_id maps to exactly one step
+
+        Args:
+            action_id: The action ID being executed
+
+        Returns:
+            The zero-based step index, or fallback to execution count
+        """
+        for i, step in enumerate(self.workflow_steps):
+            if step.get("action_id") == action_id:
+                return i
+        # Fallback to counter if action_id not found
+        return self._execution_count
 
     class Config:
         """Pydantic config to allow arbitrary types."""
@@ -96,9 +116,9 @@ class WorkflowExecuteTool(BaseTool):
         Returns:
             JSON string with the execution results.
         """
-        # Get current step index and increment for next call
-        current_step = self._execution_count
-        object.__setattr__(self, "_execution_count", current_step + 1)
+        # Get current step index by looking up action_id in workflow steps
+        # This is more reliable than counting calls (handles retries correctly)
+        current_step = self._get_step_index(action_id)
 
         action = (
             f"Executing workflow step {current_step + 1}/{self.total_steps}: "

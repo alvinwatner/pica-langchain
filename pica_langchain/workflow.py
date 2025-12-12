@@ -27,6 +27,7 @@ def get_workflow_tools(
     client: PicaClient,
     workflow_id: str,
     total_steps: int,
+    workflow_steps: Optional[List[Dict[str, Any]]] = None,
     disable_web_search: bool = False,
     uploaded_files: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BaseTool]:
@@ -40,6 +41,7 @@ def get_workflow_tools(
         client: PicaClient for executing actions
         workflow_id: The ID of the workflow being executed (for progress tracking)
         total_steps: Total number of steps in the workflow (for progress tracking)
+        workflow_steps: List of workflow step definitions for step index lookup
         disable_web_search: If True, exclude web search tools
         uploaded_files: List of uploaded files for file processing tools
 
@@ -47,12 +49,13 @@ def get_workflow_tools(
         List of LangChain tools for workflow execution
     """
     # Core execution tool with workflow context for progress tracking
-    # The tool tracks execution count internally to determine current step
+    # The tool looks up step index by action_id for accurate tracking
     tools: List[BaseTool] = [
         WorkflowExecuteTool(
             client=client,
             workflow_id=workflow_id,
             total_steps=total_steps,
+            workflow_steps=workflow_steps or [],
         )
     ]
 
@@ -356,6 +359,7 @@ def create_workflow_agent(
         client=client,
         workflow_id=workflow_id,
         total_steps=steps_count,
+        workflow_steps=workflow.get("steps", []),
         disable_web_search=disable_web_search,
         uploaded_files=uploaded_files,
     )
