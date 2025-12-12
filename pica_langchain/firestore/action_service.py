@@ -270,7 +270,7 @@ class ActionTrackingService:
                     }
                 )
 
-            logger.debug(
+            logger.info(
                 f"Updated workflow execution for {self.user_id}: "
                 f"workflow={workflow_id}, step={current_step_index}/{total_steps}, "
                 f"status={step_status}"
@@ -278,7 +278,7 @@ class ActionTrackingService:
             return True
 
         except Exception as e:
-            logger.error(f"Error updating workflow execution: {str(e)}")
+            logger.info(f"Error updating workflow execution: {str(e)}")
             return False
 
     async def cleanup_workflow_execution(self) -> bool:
