@@ -17,13 +17,16 @@ from langchain_core.tools import BaseTool
 from .client import PicaClient
 from .file_tools import create_file_processing_tools
 from .logger import get_logger
-from .tools import ExecuteTool, GoogleCustomSearchTool, WebSearchTool
+from .tools import GoogleCustomSearchTool, WebSearchTool
+from .workflow_tools import WorkflowExecuteTool
 
 logger = get_logger()
 
 
 def get_workflow_tools(
     client: PicaClient,
+    workflow_id: str,
+    total_steps: int,
     disable_web_search: bool = False,
     uploaded_files: Optional[List[Dict[str, Any]]] = None,
 ) -> List[BaseTool]:
@@ -35,14 +38,23 @@ def get_workflow_tools(
 
     Args:
         client: PicaClient for executing actions
+        workflow_id: The ID of the workflow being executed (for progress tracking)
+        total_steps: Total number of steps in the workflow (for progress tracking)
         disable_web_search: If True, exclude web search tools
         uploaded_files: List of uploaded files for file processing tools
 
     Returns:
         List of LangChain tools for workflow execution
     """
-    # Core execution tool
-    tools: List[BaseTool] = [ExecuteTool(client=client)]
+    # Core execution tool with workflow context for progress tracking
+    # The tool tracks execution count internally to determine current step
+    tools: List[BaseTool] = [
+        WorkflowExecuteTool(
+            client=client,
+            workflow_id=workflow_id,
+            total_steps=total_steps,
+        )
+    ]
 
     # Web search tools (same pattern as get_tools_from_client in utils.py)
     if not disable_web_search:
@@ -335,12 +347,15 @@ def create_workflow_agent(
         AgentExecutor ready to execute the workflow
     """
     workflow_name = workflow.get("name", "Unnamed")
+    workflow_id = workflow.get("id", workflow.get("_id", "unknown"))
     steps_count = len(workflow.get("steps", []))
     logger.info(f"Creating workflow agent for: {workflow_name} ({steps_count} steps)")
 
-    # Get filtered tools for workflow execution
+    # Get filtered tools for workflow execution with workflow context
     tools = get_workflow_tools(
         client=client,
+        workflow_id=workflow_id,
+        total_steps=steps_count,
         disable_web_search=disable_web_search,
         uploaded_files=uploaded_files,
     )

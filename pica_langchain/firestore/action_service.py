@@ -190,6 +190,130 @@ class ActionTrackingService:
             logger.error(f"Error getting action history: {str(e)}")
             return []
 
+    async def update_workflow_execution(
+        self,
+        workflow_id: str,
+        current_step_index: int,
+        total_steps: int,
+        step_status: str,
+        overall_status: str,
+        status_message: str,
+        platform: Optional[str] = None,
+    ) -> bool:
+        """Update workflow execution status in Firestore.
+
+        This method tracks workflow execution progress for real-time visualization
+        on the Flutter canvas. Status updates are written to a separate collection
+        from general agent actions.
+
+        Args:
+            workflow_id: The ID of the workflow being executed
+            current_step_index: Zero-based index of the current step
+            total_steps: Total number of steps in the workflow
+            step_status: Status of current step ('pending', 'running', 'success', 'failed')
+            overall_status: Overall workflow status ('running', 'completed', 'failed')
+            status_message: Human-readable status message
+            platform: Optional platform name for the current step
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            db = self._get_db()
+            if not db:
+                return False
+
+            # Use user_id as document ID for workflow executions
+            doc_ref = db.collection("workflow_executions").document(self.user_id)
+
+            # Create history entry
+            history_entry = {
+                "step_index": current_step_index,
+                "step_status": step_status,
+                "status_message": status_message,
+                "platform": platform,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+
+            # Get current document
+            doc = doc_ref.get()
+
+            if doc.exists:
+                # Document exists, update it
+                doc_ref.update(
+                    {
+                        "workflow_id": workflow_id,
+                        "current_step_index": current_step_index,
+                        "total_steps": total_steps,
+                        "step_status": step_status,
+                        "overall_status": overall_status,
+                        "status_message": status_message,
+                        "current_platform": platform,
+                        "history": firestore.ArrayUnion([history_entry]),
+                        "last_updated": firestore.SERVER_TIMESTAMP,
+                    }
+                )
+            else:
+                # Document doesn't exist, create it
+                doc_ref.set(
+                    {
+                        "workflow_id": workflow_id,
+                        "current_step_index": current_step_index,
+                        "total_steps": total_steps,
+                        "step_status": step_status,
+                        "overall_status": overall_status,
+                        "status_message": status_message,
+                        "current_platform": platform,
+                        "history": [history_entry],
+                        "created_at": firestore.SERVER_TIMESTAMP,
+                        "last_updated": firestore.SERVER_TIMESTAMP,
+                    }
+                )
+
+            logger.debug(
+                f"Updated workflow execution for {self.user_id}: "
+                f"workflow={workflow_id}, step={current_step_index}/{total_steps}, "
+                f"status={step_status}"
+            )
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating workflow execution: {str(e)}")
+            return False
+
+    async def cleanup_workflow_execution(self) -> bool:
+        """Delete the workflow execution document for a user.
+
+        This should be called after workflow execution completes to clean up
+        the tracking data.
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            db = self._get_db()
+            if not db:
+                return False
+
+            doc_ref = db.collection("workflow_executions").document(self.user_id)
+
+            doc = doc_ref.get()
+            if doc.exists:
+                doc_ref.delete()
+                logger.info(
+                    f"Successfully deleted workflow execution document for {self.user_id}"
+                )
+                return True
+            else:
+                logger.debug(
+                    f"Workflow execution document for {self.user_id} does not exist"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Error deleting workflow execution document: {str(e)}")
+            return False
+
 
 def initialize_firestore_service(
     firebase_creds_json: Optional[str] = None,
@@ -223,7 +347,7 @@ class DummyActionTrackingService:
     """Dummy service for when Firestore isn't available."""
 
     async def update_action(
-        self, action: str, session_id: Optional[str] = None
+        self, action: str, platform: str, session_id: Optional[str] = None
     ) -> bool:
         logger.debug(f"Dummy action tracking: {action}")
         return True
@@ -236,3 +360,23 @@ class DummyActionTrackingService:
         self, session_id: Optional[str] = None, limit: int = 50
     ) -> List[dict]:
         return []
+
+    async def update_workflow_execution(
+        self,
+        workflow_id: str,
+        current_step_index: int,
+        total_steps: int,
+        step_status: str,
+        overall_status: str,
+        status_message: str,
+        platform: Optional[str] = None,
+    ) -> bool:
+        logger.debug(
+            f"Dummy workflow execution tracking: "
+            f"workflow={workflow_id}, step={current_step_index}/{total_steps}"
+        )
+        return True
+
+    async def cleanup_workflow_execution(self) -> bool:
+        logger.debug("Dummy workflow execution tracking: cleaned up")
+        return True
