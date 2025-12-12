@@ -70,6 +70,28 @@ class WorkflowExecuteTool(BaseTool):
         # Fallback to counter if action_id not found
         return self._execution_count
 
+    def _schedule_firestore_cleanup(self, delay_seconds: int = 5) -> None:
+        """Schedule Firestore document cleanup after a delay.
+
+        This allows Flutter to receive the final status update before
+        the document is deleted, ensuring the UI can show completion state.
+
+        Args:
+            delay_seconds: Seconds to wait before cleanup (default 5)
+        """
+
+        async def delayed_cleanup():
+            await asyncio.sleep(delay_seconds)
+            try:
+                await self.client.action_tracking_service.cleanup_workflow_execution()
+                logger.info(
+                    f"[Workflow] Cleaned up Firestore document for workflow {self.workflow_id}"
+                )
+            except Exception as e:
+                logger.warning(f"[Workflow] Failed to cleanup Firestore document: {e}")
+
+        asyncio.create_task(delayed_cleanup())
+
     class Config:
         """Pydantic config to allow arbitrary types."""
 
@@ -195,6 +217,10 @@ class WorkflowExecuteTool(BaseTool):
             asyncio.create_task(
                 self.client.action_tracking_service.update_action(action_human, platform)
             )
+
+            # Schedule Firestore cleanup after workflow completes
+            if is_last_step:
+                self._schedule_firestore_cleanup(delay_seconds=5)
         else:
             action = f"Failed to execute workflow step {current_step + 1}: {response.message}"
             logger.warning(action)
@@ -217,6 +243,9 @@ class WorkflowExecuteTool(BaseTool):
             asyncio.create_task(
                 self.client.action_tracking_service.update_action(action_human, platform)
             )
+
+            # Schedule Firestore cleanup after workflow fails
+            self._schedule_firestore_cleanup(delay_seconds=5)
 
         # Remove knowledge field from response before serializing
         response_dict = response.model_dump()
